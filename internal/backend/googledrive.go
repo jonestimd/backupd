@@ -26,7 +26,7 @@ const (
 	tokenFile        = "gd_token.json"
 	folderMimeType   = "application/vnd.google-apps.folder"
 	rootFolderId     = "root"
-	fileFields       = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, version)"
+	fileFields       = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
 )
 
 type googleDrive struct {
@@ -152,19 +152,20 @@ func (gd *googleDrive) loadFiles() (err error) {
 			if err != nil {
 				return err
 			}
-			for page, err := gd.listFiles().Do(); true; page, err = gd.listFilesPage(page.NextPageToken).Do() {
-				if err != nil {
-					log.Fatalf("Unable to retrieve files: %v", err)
-					return err
-				}
+			err = gd.listFiles().Pages(nil, func(page *drive.FileList) error {
 				if len(page.Files) > 0 {
 					for _, file := range page.Files {
-						putFile(byId, file.Id, file)
+						if !file.Shared {
+							if err := putFile(byId, file.Id, file); err != nil {
+								return err
+							}
+						}
 					}
 				}
-				if len(page.NextPageToken) == 0 { // TODO refactor
-					break
-				}
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 
 			byPath, err := tx.CreateBucket([]byte(byPathBucket))
@@ -182,12 +183,7 @@ func (gd *googleDrive) loadFiles() (err error) {
 
 // Create an call to begin listing files
 func (gd *googleDrive) listFiles() *drive.FilesListCall {
-	return gd.srv.Files.List().Fields(fileFields)
-}
-
-// Create a call to continue listing files
-func (gd *googleDrive) listFilesPage(nextPageToken string) *drive.FilesListCall {
-	return gd.listFiles().PageToken(nextPageToken)
+	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed")
 }
 
 func putFile(b *bolt.Bucket, key string, file *drive.File) error {

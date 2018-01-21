@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	bolt "github.com/coreos/bbolt"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -17,12 +18,22 @@ import (
 
 const (
 	configDir        = ".backupd"
+	dataDir          = configDir
+	dataFile         = "google_drive.db"
+	byIdBucket       = "FilesById"
+	byPathBucket     = "FilesByPath"
 	clientSecretFile = "gd_client_secret.json"
 	tokenFile        = "gd_token.json"
 	folderMimeType   = "application/vnd.google-apps.folder"
 	rootFolderId     = "root"
-	fileFields       = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, appProperties, size, modifiedTime, trashed, version)"
+	fileFields       = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, version)"
 )
+
+type googleDrive struct {
+	destinationFolder *string
+	srv               *drive.Service
+	db                *bolt.DB
+}
 
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
@@ -96,35 +107,16 @@ func saveToken(file string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
-func listFiles(srv *drive.Service) *drive.FilesListCall {
-	return srv.Files.List().Fields(fileFields)
-}
+// Create a connection to Google Drive
+func NewGoogleDrive(destination *string) (Backend, error) {
+	backend := googleDrive{destinationFolder: destination}
 
-func listFilesPage(srv *drive.Service, nextPageToken string) *drive.FilesListCall {
-	return listFiles(srv).PageToken(nextPageToken)
-}
-
-func getPath(filesById map[string]*drive.File, fileId string) string {
-	names := make([]string, 0)
-	for file := filesById[fileId]; file != nil && len(file.Parents) > 0; file = filesById[file.Parents[0]] {
-		names = append(names, file.Name)
-	}
-	if len(names) == 0 {
-		return ""
-	}
-	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 {
-		names[i], names[j] = names[j], names[i]
-	}
-	return filepath.Join(names...)
-}
-
-func ListFiles() error {
 	ctx := context.Background()
 
 	b, err := ioutil.ReadFile(filepath.Join(getUserHome(), configDir, clientSecretFile))
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
-		return err
+		return nil, err
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
@@ -132,40 +124,83 @@ func ListFiles() error {
 	config, err := google.ConfigFromJSON(b, drive.DriveScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
-		return err
+		return nil, err
 	}
 	client := getClient(ctx, config)
 
-	srv, err := drive.New(client)
+	backend.srv, err = drive.New(client)
 	if err != nil {
-		log.Fatalf("Unable to retrieve drive Client %v", err)
+		log.Fatalf("Unable to create drive Client %v", err)
+		return nil, err
+	}
+
+	return &backend, backend.loadFiles()
+}
+
+// Initialize the file info cache
+func (gd *googleDrive) loadFiles() (err error) {
+	gd.db, err = openDb(filepath.Join(getUserHome(), dataDir, dataFile))
+	if err != nil {
+		log.Fatalf("Failed to open database: %v\n", err)
 		return err
 	}
-
-	filesById := make(map[string]*drive.File)
-
-	for page, err := listFiles(srv).Do(); true; page, err = listFilesPage(srv, page.NextPageToken).Do() {
-		if err != nil {
-			log.Fatalf("Unable to retrieve files: %v", err)
-			return err
-		}
-		if len(page.Files) > 0 {
-			for _, i := range page.Files {
-				filesById[i.Id] = i
+	return gd.db.Update(func(tx *bolt.Tx) error {
+		byId := tx.Bucket([]byte(byIdBucket))
+		if byId == nil {
+			log.Println("Getting files from Google Drive")
+			byId, err = tx.CreateBucket([]byte(byIdBucket))
+			if err != nil {
+				return err
 			}
-		}
-		if len(page.NextPageToken) == 0 {
-			break
-		}
-	}
+			for page, err := gd.listFiles().Do(); true; page, err = gd.listFilesPage(page.NextPageToken).Do() {
+				if err != nil {
+					log.Fatalf("Unable to retrieve files: %v", err)
+					return err
+				}
+				if len(page.Files) > 0 {
+					for _, file := range page.Files {
+						putFile(byId, file.Id, file)
+					}
+				}
+				if len(page.NextPageToken) == 0 { // TODO refactor
+					break
+				}
+			}
 
-	filesByPath := make(map[string]*drive.File)
+			byPath, err := tx.CreateBucket([]byte(byPathBucket))
+			if err != nil {
+				return err
+			}
+			byId.ForEach(func(id, value []byte) error {
+				path := getPath(byId, string(id))
+				return byPath.Put([]byte(path), value)
+			})
+		}
+		return nil
+	})
+}
 
-	for id, file := range filesById {
-		filesByPath[getPath(filesById, id)] = file
-	}
-	for path := range filesByPath {
-		log.Println(path)
-	}
-	return nil
+// Create an call to begin listing files
+func (gd *googleDrive) listFiles() *drive.FilesListCall {
+	return gd.srv.Files.List().Fields(fileFields)
+}
+
+// Create a call to continue listing files
+func (gd *googleDrive) listFilesPage(nextPageToken string) *drive.FilesListCall {
+	return gd.listFiles().PageToken(nextPageToken)
+}
+
+func putFile(b *bolt.Bucket, key string, file *drive.File) error {
+	rf := RemoteFile{file.Id, file.Name, uint64(file.Size), &file.Md5Checksum, file.Parents, &file.ModifiedTime, nil}
+	return b.Put([]byte(key), rf.toBytes())
+}
+
+func (gd *googleDrive) ListFiles() {
+	gd.db.View(func(tx *bolt.Tx) error {
+		tx.Bucket([]byte(byPathBucket)).ForEach(func(path []byte, value []byte) error {
+			fmt.Println(string(path))
+			return nil
+		})
+		return nil
+	})
 }

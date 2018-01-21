@@ -15,7 +15,10 @@ import (
 func main() {
 	flag.Parse()
 
-	backend.ListFiles()
+	gd, err := backend.NewGoogleDrive(nil)
+	if err == nil {
+		gd.ListFiles()
+	}
 
 	path := "/home/tim/Documents"
 

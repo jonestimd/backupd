@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	bolt "github.com/coreos/bbolt"
+	"github.com/jonestimd/backupd/internal/database"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -20,8 +20,6 @@ const (
 	configDir        = ".backupd"
 	dataDir          = configDir
 	dataFile         = "google_drive.db"
-	byIdBucket       = "FilesById"
-	byPathBucket     = "FilesByPath"
 	clientSecretFile = "gd_client_secret.json"
 	tokenFile        = "gd_token.json"
 	folderMimeType   = "application/vnd.google-apps.folder"
@@ -32,7 +30,7 @@ const (
 type googleDrive struct {
 	destinationFolder *string
 	srv               *drive.Service
-	db                *bolt.DB
+	dao               database.Dao
 }
 
 // getClient uses a Context and Config to retrieve a Token
@@ -137,28 +135,25 @@ func NewGoogleDrive(destination *string) (Backend, error) {
 	return &backend, backend.loadFiles()
 }
 
+func toRemoteFile(file *drive.File) *database.RemoteFile {
+	return &database.RemoteFile{file.Id, file.Name, uint64(file.Size), &file.Md5Checksum, file.Parents, &file.ModifiedTime, nil}
+}
+
 // Initialize the file info cache
 func (gd *googleDrive) loadFiles() (err error) {
-	gd.db, err = openDb(filepath.Join(getUserHome(), dataDir, dataFile))
+	gd.dao, err = database.OpenBoltDb(filepath.Join(getUserHome(), dataDir, dataFile))
 	if err != nil {
 		log.Fatalf("Failed to open database: %v\n", err)
 		return err
 	}
-	return gd.db.Update(func(tx *bolt.Tx) error {
-		byId := tx.Bucket([]byte(byIdBucket))
-		if byId == nil {
-			log.Println("Getting files from Google Drive")
-			byId, err = tx.CreateBucket([]byte(byIdBucket))
-			if err != nil {
-				return err
-			}
+	if gd.dao.IsEmpty() {
+		log.Println("Getting files from Google Drive")
+		return gd.dao.Update(func(tx database.Transation) error {
 			err = gd.listFiles().Pages(nil, func(page *drive.FileList) error {
-				if len(page.Files) > 0 {
-					for _, file := range page.Files {
-						if !file.Shared {
-							if err := putFile(byId, file.Id, file); err != nil {
-								return err
-							}
+				for _, file := range page.Files {
+					if !file.Shared {
+						if err := tx.InsertFile(toRemoteFile(file)); err != nil {
+							return err
 						}
 					}
 				}
@@ -168,17 +163,10 @@ func (gd *googleDrive) loadFiles() (err error) {
 				return err
 			}
 
-			byPath, err := tx.CreateBucket([]byte(byPathBucket))
-			if err != nil {
-				return err
-			}
-			byId.ForEach(func(id, value []byte) error {
-				path := getPath(byId, string(id))
-				return byPath.Put([]byte(path), value)
-			})
-		}
-		return nil
-	})
+			return tx.SetPaths()
+		})
+	}
+	return nil
 }
 
 // Create an call to begin listing files
@@ -186,15 +174,10 @@ func (gd *googleDrive) listFiles() *drive.FilesListCall {
 	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed")
 }
 
-func putFile(b *bolt.Bucket, key string, file *drive.File) error {
-	rf := RemoteFile{file.Id, file.Name, uint64(file.Size), &file.Md5Checksum, file.Parents, &file.ModifiedTime, nil}
-	return b.Put([]byte(key), rf.toBytes())
-}
-
 func (gd *googleDrive) ListFiles() {
-	gd.db.View(func(tx *bolt.Tx) error {
-		tx.Bucket([]byte(byPathBucket)).ForEach(func(path []byte, value []byte) error {
-			fmt.Println(string(path))
+	gd.dao.View(func(tx database.Transation) error {
+		tx.ForEachPath(func(path string, fileId string) error {
+			fmt.Println(path)
 			return nil
 		})
 		return nil

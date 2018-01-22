@@ -9,8 +9,9 @@ type boltTx struct {
 	byPath *bolt.Bucket
 }
 
-func (tx *boltTx) InsertFile(rf *RemoteFile) error {
-	return tx.byId.Put([]byte(rf.Id), toBytes(rf))
+func (tx *boltTx) InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error {
+	rf := remoteFile{name, size, md5checksum, parentIds, &lastModified, localId}
+	return tx.byId.Put([]byte(id), toBytes(&rf))
 }
 
 func (tx *boltTx) SetPaths() error {

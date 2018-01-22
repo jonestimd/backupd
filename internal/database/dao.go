@@ -1,7 +1,6 @@
 package database
 
-type RemoteFile struct {
-	Id           string
+type remoteFile struct {
 	Name         string
 	Size         uint64
 	Md5Checksum  *string
@@ -11,7 +10,7 @@ type RemoteFile struct {
 }
 
 type Transation interface {
-	InsertFile(*RemoteFile) error
+	InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error
 	SetPaths() error
 	ForEachPath(func(path string, fileId string) error) error
 }

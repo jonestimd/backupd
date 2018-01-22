@@ -132,15 +132,11 @@ func NewGoogleDrive(destination *string) (Backend, error) {
 		return nil, err
 	}
 
-	return &backend, backend.loadFiles()
-}
-
-func toRemoteFile(file *drive.File) *database.RemoteFile {
-	return &database.RemoteFile{file.Id, file.Name, uint64(file.Size), &file.Md5Checksum, file.Parents, &file.ModifiedTime, nil}
+	return &backend, backend.openCache()
 }
 
 // Initialize the file info cache
-func (gd *googleDrive) loadFiles() (err error) {
+func (gd *googleDrive) openCache() (err error) {
 	gd.dao, err = database.OpenBoltDb(filepath.Join(getUserHome(), dataDir, dataFile))
 	if err != nil {
 		log.Fatalf("Failed to open database: %v\n", err)
@@ -148,30 +144,36 @@ func (gd *googleDrive) loadFiles() (err error) {
 	}
 	if gd.dao.IsEmpty() {
 		log.Println("Getting files from Google Drive")
-		return gd.dao.Update(func(tx database.Transation) error {
-			err = gd.listFiles().Pages(nil, func(page *drive.FileList) error {
-				for _, file := range page.Files {
-					if !file.Shared {
-						if err := tx.InsertFile(toRemoteFile(file)); err != nil {
-							return err
-						}
-					}
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-
-			return tx.SetPaths()
-		})
+		return gd.dao.Update(gd.loadFiles)
 	}
 	return nil
 }
 
-// Create an call to begin listing files
-func (gd *googleDrive) listFiles() *drive.FilesListCall {
-	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed")
+func (gd *googleDrive) loadFiles(tx database.Transation) (err error) {
+	err = gd.listFiles(func(page *drive.FileList) error {
+		for _, f := range page.Files {
+			if err := insertFile(tx, f); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return tx.SetPaths()
+}
+
+func insertFile(tx database.Transation, f *drive.File) error {
+	if !f.Shared {
+		return tx.InsertFile(f.Id, f.Name, uint64(f.Size), &f.Md5Checksum, f.Parents, f.ModifiedTime, nil)
+	}
+	return nil
+}
+
+func (gd *googleDrive) listFiles(cb func(*drive.FileList) error) error {
+	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)
 }
 
 func (gd *googleDrive) ListFiles() {

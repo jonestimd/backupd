@@ -18,7 +18,7 @@ type boltDao struct {
 	db *bolt.DB
 }
 
-func toBytes(rf *RemoteFile) []byte {
+func toBytes(rf *remoteFile) []byte {
 	buf := bytes.Buffer{}
 	enc := gob.NewEncoder(&buf)
 	if err := enc.Encode(rf); err != nil {
@@ -27,8 +27,8 @@ func toBytes(rf *RemoteFile) []byte {
 	return buf.Bytes()
 }
 
-func toRemoteFile(b []byte) *RemoteFile {
-	rf := RemoteFile{}
+func toRemoteFile(b []byte) *remoteFile {
+	rf := remoteFile{}
 	buf := bytes.NewBuffer(b)
 	dec := gob.NewDecoder(buf)
 	if err := dec.Decode(&rf); err != nil {
@@ -37,7 +37,7 @@ func toRemoteFile(b []byte) *RemoteFile {
 	return &rf
 }
 
-func getFile(b *bolt.Bucket, key string) *RemoteFile {
+func getFile(b *bolt.Bucket, key string) *remoteFile {
 	buf := b.Get([]byte(key))
 	if buf == nil {
 		return nil

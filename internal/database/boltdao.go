@@ -18,6 +18,10 @@ type boltDao struct {
 	db *bolt.DB
 }
 
+type bucket interface {
+	Get([]byte) []byte
+}
+
 func toBytes(rf *remoteFile) []byte {
 	buf := bytes.Buffer{}
 	enc := gob.NewEncoder(&buf)
@@ -37,7 +41,7 @@ func toRemoteFile(b []byte) *remoteFile {
 	return &rf
 }
 
-func getFile(b *bolt.Bucket, key string) *remoteFile {
+func getFile(b bucket, key string) *remoteFile {
 	buf := b.Get([]byte(key))
 	if buf == nil {
 		return nil
@@ -46,7 +50,7 @@ func getFile(b *bolt.Bucket, key string) *remoteFile {
 }
 
 // Get the full path of a remote file
-func getPath(byId *bolt.Bucket, fileId string) string {
+func getPath(byId bucket, fileId string) string {
 	names := make([]string, 0)
 	// TODO get all paths for the file
 	for file := getFile(byId, fileId); file != nil && len(file.ParentIds) > 0; file = getFile(byId, file.ParentIds[0]) {
@@ -69,6 +73,10 @@ func OpenBoltDb(fileName string) (*boltDao, error) {
 	return &boltDao{db}, nil
 }
 
+func (dao *boltDao) Close() error {
+	return dao.db.Close()
+}
+
 func (dao *boltDao) IsEmpty() bool {
 	var isEmpty bool
 	dao.db.View(func(tx *bolt.Tx) error {
@@ -78,13 +86,13 @@ func (dao *boltDao) IsEmpty() bool {
 	return isEmpty
 }
 
-func (dao *boltDao) View(cb func(Transation) error) error {
+func (dao *boltDao) View(cb func(Transaction) error) error {
 	return dao.db.View(func(tx *bolt.Tx) error {
 		return cb(&boltTx{tx.Bucket([]byte(byIdBucket)), tx.Bucket([]byte(byPathBucket))})
 	})
 }
 
-func (dao *boltDao) Update(cb func(Transation) error) error {
+func (dao *boltDao) Update(cb func(Transaction) error) error {
 	return dao.db.Update(func(tx *bolt.Tx) error {
 		byId, err := tx.CreateBucketIfNotExists([]byte(byIdBucket))
 		if err != nil {

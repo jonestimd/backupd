@@ -1,5 +1,9 @@
 package database
 
+import (
+	"io"
+)
+
 type remoteFile struct {
 	Name         string
 	Size         uint64
@@ -9,7 +13,7 @@ type remoteFile struct {
 	LocalId      *string
 }
 
-type Transation interface {
+type Transaction interface {
 	InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error
 	SetPaths() error
 	ForEachPath(func(path string, fileId string) error) error
@@ -17,6 +21,7 @@ type Transation interface {
 
 type Dao interface {
 	IsEmpty() bool
-	Update(func(Transation) error) error
-	View(func(Transation) error) error
+	Update(func(Transaction) error) error
+	View(func(Transaction) error) error
+	io.Closer
 }

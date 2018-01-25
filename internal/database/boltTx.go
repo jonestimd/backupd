@@ -1,12 +1,8 @@
 package database
 
-import (
-	bolt "github.com/coreos/bbolt"
-)
-
 type boltTx struct {
-	byId   *bolt.Bucket
-	byPath *bolt.Bucket
+	byId   bucket
+	byPath bucket
 }
 
 func (tx *boltTx) InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error {

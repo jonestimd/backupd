@@ -18,10 +18,6 @@ type boltDao struct {
 	db *bolt.DB
 }
 
-type bucket interface {
-	Get([]byte) []byte
-}
-
 func toBytes(rf *remoteFile) []byte {
 	buf := bytes.Buffer{}
 	enc := gob.NewEncoder(&buf)

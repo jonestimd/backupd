@@ -25,3 +25,9 @@ type Dao interface {
 	View(func(Transaction) error) error
 	io.Closer
 }
+
+type bucket interface {
+	Get(id []byte) []byte
+	Put(id []byte, value []byte) error
+	ForEach(func(key []byte, value []byte) error) error
+}

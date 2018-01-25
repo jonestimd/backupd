@@ -1,8 +1,6 @@
 package database
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
 	"os"
 	"path/filepath"
@@ -26,37 +24,14 @@ func init() {
 	nonemptyDbFile = filepath.Join(dataDir, "non-empty.db")
 }
 
-type mockBucket struct {
-	files map[string]*remoteFile
-}
-
-func (b *mockBucket) Get(key []byte) []byte {
-	file := b.files[string(key)]
-	if file != nil {
-		buf := bytes.Buffer{}
-		enc := gob.NewEncoder(&buf)
-		enc.Encode(file)
-		return buf.Bytes()
-	}
-	return nil
-}
-
-func makeMockBucket(files ...*remoteFile) *mockBucket {
-	b := &mockBucket{make(map[string]*remoteFile)}
-	for _, file := range files {
-		b.files[file.Name] = file
-	}
-	return b
-}
-
 func TestGetFile(t *testing.T) {
-	b := makeMockBucket(&remoteFile{Name: "existing", Size: 123})
+	b := makeFileBucket(&remoteFile{Name: "existing", Size: 123})
 	tests := []struct {
 		description string
 		fileId      string
 		expected    *remoteFile
 	}{
-		{"existing file", "existing", b.files["existing"]},
+		{"existing file", "existing", toRemoteFile(b.keyValues["existing"])},
 		{"non-existing file", "unknown", nil},
 	}
 
@@ -76,9 +51,9 @@ func TestGetPath(t *testing.T) {
 		bucket      *mockBucket
 		expected    string
 	}{
-		{"nil parents", makeMockBucket(&remoteFile{Name: "name"}), "/"},
-		{"no parents", makeMockBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), "/file1"},
-		{"one parent", makeMockBucket(
+		{"nil parents", makeFileBucket(&remoteFile{Name: "name"}), "/"},
+		{"no parents", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), "/file1"},
+		{"one parent", makeFileBucket(
 			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
 			&remoteFile{Name: "parent", ParentIds: []string{"gp"}}), "/parent/file1"},
 	}

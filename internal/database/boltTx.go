@@ -12,8 +12,13 @@ func (tx *boltTx) InsertFile(id string, name string, size uint64, md5checksum *s
 
 func (tx *boltTx) SetPaths() error {
 	return tx.byId.ForEach(func(id, value []byte) error {
-		path := getPath(tx.byId, string(id))
-		return tx.byPath.Put([]byte(path), id)
+		paths := getPaths(tx.byId, string(id))
+		for _, path := range paths {
+			if err := tx.byPath.Put([]byte(path), id); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

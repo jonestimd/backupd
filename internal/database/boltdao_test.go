@@ -37,7 +37,7 @@ func TestGetFile(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			actual := getFile(b, test.fileId)
+			actual := getFile(b, &test.fileId)
 			if !reflect.DeepEqual(actual, test.expected) {
 				t.Errorf("Expected remoteFile %v to equal %v", actual, test.expected)
 			}
@@ -49,20 +49,29 @@ func TestGetPath(t *testing.T) {
 	tests := []struct {
 		description string
 		bucket      *mockBucket
-		expected    string
+		expected    []string
 	}{
-		{"nil parents", makeFileBucket(&remoteFile{Name: "name"}), "/"},
-		{"no parents", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), "/file1"},
+		{"unknown file", makeFileBucket(&remoteFile{Name: "unknown"}), []string{}},
+		{"nil parents", makeFileBucket(&remoteFile{Name: "file1"}), []string{"/file1"}},
+		{"empty parents", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{}}), []string{"/file1"}},
+		{"unknown parent", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), []string{"/file1"}},
 		{"one parent", makeFileBucket(
 			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
-			&remoteFile{Name: "parent", ParentIds: []string{"gp"}}), "/parent/file1"},
+			&remoteFile{Name: "parent", ParentIds: []string{"gp"}}), []string{"/parent/file1"}},
+		{"parent with empty parents", makeFileBucket(
+			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
+			&remoteFile{Name: "parent", ParentIds: []string{}}), []string{"/parent/file1"}},
+		{"two parents", makeFileBucket(
+			&remoteFile{Name: "file1", ParentIds: []string{"parent1", "parent2"}},
+			&remoteFile{Name: "parent1", ParentIds: []string{"gp"}},
+			&remoteFile{Name: "parent2", ParentIds: []string{"gp"}}), []string{"/parent1/file1", "/parent2/file1"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			actual := getPath(test.bucket, "file1")
-			if actual != test.expected {
-				t.Errorf("Expected path %s to equal %s", actual, test.expected)
+			actual := getPaths(test.bucket, "file1")
+			if !reflect.DeepEqual(actual, test.expected) {
+				t.Errorf("Expected paths %v to equal %v", actual, test.expected)
 			}
 		})
 	}

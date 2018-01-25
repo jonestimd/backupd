@@ -37,28 +37,42 @@ func toRemoteFile(b []byte) *remoteFile {
 	return &rf
 }
 
-func getFile(b bucket, key string) *remoteFile {
-	buf := b.Get([]byte(key))
+func getFile(b bucket, key *string) *remoteFile {
+	buf := b.Get([]byte(*key))
 	if buf == nil {
 		return nil
 	}
 	return toRemoteFile(buf)
 }
 
-// Get the full path of a remote file
-func getPath(byId bucket, fileId string) string {
-	names := make([]string, 0)
-	// TODO get all paths for the file
-	for file := getFile(byId, fileId); file != nil && len(file.ParentIds) > 0; file = getFile(byId, file.ParentIds[0]) {
-		names = append(names, file.Name)
+// Get the full path(s) of a remote file
+func getPaths(byId bucket, fileId string) []string {
+	paths := make([]string, 0)
+	stack := make([]*pathNode, 0, 1)
+	file := getFile(byId, &fileId)
+	if file != nil {
+		if file.ParentIds == nil || len(file.ParentIds) == 0 {
+			return []string{string(filepath.Separator) + file.Name}
+		}
+		for i := 0; i < len(file.ParentIds); i++ {
+			stack = append(stack, newPathNode([]string{file.Name}, &file.ParentIds[i]))
+		}
 	}
-	if len(names) == 0 {
-		return string(filepath.Separator)
+	for len(stack) > 0 {
+		curentPath := stack[0]
+		stack = stack[1:]
+		file = getFile(byId, curentPath.nextId)
+		if file == nil {
+			paths = append(paths, curentPath.String())
+		} else if len(file.ParentIds) == 0 {
+			paths = append(paths, curentPath.append(file.Name, nil).String())
+		} else {
+			for i := 0; i < len(file.ParentIds); i++ {
+				stack = append(stack, curentPath.append(file.Name, &file.ParentIds[i]))
+			}
+		}
 	}
-	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 {
-		names[i], names[j] = names[j], names[i]
-	}
-	return string(filepath.Separator) + filepath.Join(names...)
+	return paths
 }
 
 func OpenBoltDb(fileName string) (*boltDao, error) {

@@ -38,7 +38,6 @@ func TestSetPaths(t *testing.T) {
 	if len(pathBucket.keyValues) != 2 {
 		t.Error("Expected paths for each file")
 	}
-	t.Logf("paths: %v", pathBucket.keyValues)
 	checkPath(t, "parent", string(pathBucket.keyValues["/parent"]))
 	checkPath(t, "name", string(pathBucket.keyValues["/parent/name"]))
 }

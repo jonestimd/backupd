@@ -17,3 +17,6 @@
 .glide/
 
 /vendor/
+
+# executables
+/cmd/backupd/backupd

@@ -149,7 +149,7 @@ func (gd *googleDrive) openCache() (err error) {
 	return nil
 }
 
-func (gd *googleDrive) loadFiles(tx database.Transation) (err error) {
+func (gd *googleDrive) loadFiles(tx database.Transaction) (err error) {
 	err = gd.listFiles(func(page *drive.FileList) error {
 		for _, f := range page.Files {
 			if err := insertFile(tx, f); err != nil {
@@ -165,7 +165,7 @@ func (gd *googleDrive) loadFiles(tx database.Transation) (err error) {
 	return tx.SetPaths()
 }
 
-func insertFile(tx database.Transation, f *drive.File) error {
+func insertFile(tx database.Transaction, f *drive.File) error {
 	if !f.Shared {
 		return tx.InsertFile(f.Id, f.Name, uint64(f.Size), &f.Md5Checksum, f.Parents, f.ModifiedTime, nil)
 	}
@@ -177,7 +177,7 @@ func (gd *googleDrive) listFiles(cb func(*drive.FileList) error) error {
 }
 
 func (gd *googleDrive) ListFiles() {
-	gd.dao.View(func(tx database.Transation) error {
+	gd.dao.View(func(tx database.Transaction) error {
 		tx.ForEachPath(func(path string, fileId string) error {
 			fmt.Println(path)
 			return nil

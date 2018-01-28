@@ -27,7 +27,8 @@ required = [
 	"golang.org/x/sys/unix",
 	"golang.org/x/net/publicsuffix",
 	"golang.org/x/net/html",
-	"github.com/coreos/bbolt"
+	"github.com/coreos/bbolt",
+	"github.com/go-yaml/yaml"
 ]
 
 [[constraint]]

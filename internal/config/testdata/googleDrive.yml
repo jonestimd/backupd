@@ -1,0 +1,5 @@
+googleDrive:
+  clientConfig: gd_client_secret.json
+  tokenFile: gd_token.json
+  folderMimeType: application/vnd-custom
+  rootFolderId: customRoot

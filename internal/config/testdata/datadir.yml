@@ -1,0 +1,6 @@
+dataDir: "~/.backupd"
+sources:
+- path: /home/me/Documents
+  destination:
+    type: googleDrive
+    folder: Backups/me

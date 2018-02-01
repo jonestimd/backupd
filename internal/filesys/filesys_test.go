@@ -10,7 +10,7 @@ func TestListDirectories(t *testing.T) {
 		startPath   string
 		expected    []string
 	}{
-		{"directory", "..", []string{"..", "../database", "../backend", "../filesys", "../database/testdata"}},
+		{"directory", "..", []string{"..", "../database", "../backend", "../config", "../filesys", "../database/testdata", "../config/testdata"}},
 		{"file", "filesys.go", []string{}},
 		{"unknown", "x", []string{}},
 	}
@@ -27,10 +27,11 @@ func TestListDirectories(t *testing.T) {
 			}
 			if len(result) != len(test.expected) {
 				t.Errorf("Expected %d directories, found %d", len(test.expected), len(result))
-			}
-			for i, d := range result {
-				if d != test.expected[i] {
-					t.Errorf("Expected path %s to equal %s", d, test.expected[i])
+			} else {
+				for i, d := range result {
+					if d != test.expected[i] {
+						t.Errorf("Expected path %s to equal %s", d, test.expected[i])
+					}
 				}
 			}
 		})

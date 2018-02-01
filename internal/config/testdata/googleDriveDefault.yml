@@ -1,3 +1,0 @@
-googleDrive:
-  clientConfig: gd_client_secret.json
-  tokenFile: gd_token.json

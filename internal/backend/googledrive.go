@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jonestimd/backupd/internal/config"
 	"github.com/jonestimd/backupd/internal/database"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -17,30 +18,29 @@ import (
 )
 
 const (
-	configDir        = ".backupd"
-	dataDir          = configDir
-	dataFile         = "google_drive.db"
-	clientSecretFile = "gd_client_secret.json"
-	tokenFile        = "gd_token.json"
-	folderMimeType   = "application/vnd.google-apps.folder"
-	rootFolderId     = "root"
-	fileFields       = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
+	defaultDataFile       = "google_drive.db"
+	defaultSecretFile     = "gd_client_secret.json"
+	defaultTokenFile      = "gd_token.json"
+	defaultFolderMimeType = "application/vnd.google-apps.folder"
+	defaultRootFolderId   = "root"
+	fileFields            = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
 )
 
 type googleDrive struct {
-	destinationFolder *string
+	destinationFolder string
+	folderMimeType    string
+	rootFolderId      string
 	srv               *drive.Service
 	dao               database.Dao
 }
 
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
-func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-	cacheFile := tokenCacheFile()
-	tok, err := tokenFromFile(cacheFile)
+func getClient(tokenFile string, ctx context.Context, config *oauth2.Config) *http.Client {
+	tok, err := tokenFromFile(tokenFile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
+		saveToken(tokenFile, tok)
 	}
 	return config.Client(ctx, tok)
 }
@@ -62,22 +62,6 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 		log.Fatalf("Unable to retrieve token from web %v", err)
 	}
 	return tok
-}
-
-func getUserHome() string {
-	home := os.Getenv("HOME")
-	if len(home) == 0 {
-		return "~"
-	}
-	return home
-}
-
-// tokenCacheFile generates credential file path/filename.
-// It returns the generated credential path/filename.
-func tokenCacheFile() string {
-	tokenCacheDir := filepath.Join(getUserHome(), configDir)
-	os.MkdirAll(tokenCacheDir, 0700)
-	return filepath.Join(tokenCacheDir, tokenFile)
 }
 
 // tokenFromFile retrieves a Token from a given file path.
@@ -106,38 +90,53 @@ func saveToken(file string, token *oauth2.Token) {
 }
 
 // Create a connection to Google Drive
-func NewGoogleDrive(destination *string) (Backend, error) {
-	backend := googleDrive{destinationFolder: destination}
+func NewGoogleDrive(configDir *string, dataDir *string, dest *config.Destination) (*googleDrive, error) {
+	backend := googleDrive{
+		folderMimeType:    getParameter(dest.Config, "folderMimeType", defaultFolderMimeType),
+		rootFolderId:      getParameter(dest.Config, "rootFolderId", defaultRootFolderId),
+		destinationFolder: dest.Folder,
+	}
+
+	if err := backend.connect(configDir, dataDir, dest); err != nil {
+		return nil, err
+	}
+
+	return &backend, backend.openCache(filepath.Join(*dataDir, getParameter(dest.Config, "dataFile", defaultDataFile)))
+}
+
+// Connect to google drive.
+func (gd *googleDrive) connect(configDir *string, dataDir *string, dest *config.Destination) error {
+	tokenFile := tokenCacheFile(dataDir, getParameter(dest.Config, "tokenFile", defaultTokenFile))
 
 	ctx := context.Background()
 
-	b, err := ioutil.ReadFile(filepath.Join(getUserHome(), configDir, clientSecretFile))
+	clientSecretFile := getParameter(dest.Config, "clientSecretFile", defaultSecretFile)
+	b, err := ioutil.ReadFile(filepath.Join(*configDir, clientSecretFile))
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
-		return nil, err
+		return err
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
 	// at ~/.backupd/gd_token.json
-	config, err := google.ConfigFromJSON(b, drive.DriveScope)
+	oauthConfig, err := google.ConfigFromJSON(b, drive.DriveScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
-		return nil, err
+		return err
 	}
-	client := getClient(ctx, config)
+	client := getClient(tokenFile, ctx, oauthConfig)
 
-	backend.srv, err = drive.New(client)
+	gd.srv, err = drive.New(client)
 	if err != nil {
 		log.Fatalf("Unable to create drive Client %v", err)
-		return nil, err
+		return err
 	}
-
-	return &backend, backend.openCache()
+	return nil
 }
 
 // Initialize the file info cache
-func (gd *googleDrive) openCache() (err error) {
-	gd.dao, err = database.OpenBoltDb(filepath.Join(getUserHome(), dataDir, dataFile))
+func (gd *googleDrive) openCache(dataFile string) (err error) {
+	gd.dao, err = database.OpenBoltDb(dataFile)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v\n", err)
 		return err

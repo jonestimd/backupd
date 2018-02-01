@@ -1,9 +1,15 @@
+// Copyright (c) 2018.  Tim  Jones. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+// Package database provides caching of data for a remote destination.
 package database
 
 import (
 	"io"
 )
 
+// Cache record for a remote file.
 type remoteFile struct {
 	Name         string
 	Size         uint64

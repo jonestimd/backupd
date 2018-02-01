@@ -4,9 +4,10 @@ import (
 	"path/filepath"
 )
 
+// Internal struct for building file paths.
 type pathNode struct {
-	names  []string
-	nextId *string
+	names  []string // path node names in bottom-up order (child, parent, ...)
+	nextId *string  // node ID of one of the path's parents
 }
 
 func newPathNode(names []string, parentId *string) *pathNode {

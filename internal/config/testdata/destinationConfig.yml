@@ -1,0 +1,7 @@
+sources:
+- path: /home/me/Documents
+  destination:
+    type: googleDrive
+    folder: Backups/me
+    config:
+      clientConfig: gd_client_secret.json

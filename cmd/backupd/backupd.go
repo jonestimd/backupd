@@ -6,18 +6,46 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/jonestimd/backupd/internal/backend"
+	"github.com/jonestimd/backupd/internal/config"
 	"github.com/jonestimd/backupd/internal/filesys"
+	"os"
+	"path/filepath"
 )
 
 // TODO handle mount/umount for watched directories
 // TODO wait for file to be closed before uploading
 
+const (
+	configFileName = "backupd.yml"
+)
+
+var help = flag.Bool("h", false, "Show help")
+var configDir = flag.String("c", defaultConfigDir, "Configuration directory")
+var dataDir = flag.String("d", defaultDataDir, "Data directory")
+
 func main() {
 	flag.Parse()
+	if *help {
+		flag.Usage()
+		os.Exit(1)
+	}
 
-	gd, err := backend.NewGoogleDrive(nil)
-	if err == nil {
-		gd.ListFiles()
+	configPath := filepath.Join(*configDir, configFileName)
+	cfg, err := config.Parse(configPath)
+	if err != nil {
+		log.Fatalf("Error reading configuration from %s: %v\n", configPath, err)
+		os.Exit(1)
+	}
+
+	for _, source := range cfg.Sources {
+		switch source.Destination.Type {
+		case config.GoogleDriveName:
+			gd, err := backend.NewGoogleDrive(configDir, dataDir, &source.Destination)
+			if err != nil {
+				log.Fatalf("Error connecting to Google Drive: %v\n", err)
+				os.Exit(1)
+			}
+		}
 	}
 
 	path := "/home/tim/Documents"

@@ -4,28 +4,32 @@ import (
 	"io/ioutil"
 
 	"github.com/go-yaml/yaml"
+	"errors"
 )
 
 const (
 	GoogleDriveName = "googleDrive"
 )
 
-type DestinationType int
+type Backend struct {
+	Type   string
+	Config map[string]*string
+}
 
 type Destination struct {
-	Type    string
-	Folder  string
+	Backend *string
+	Folder  *string
 	Encrypt bool
-	Config  map[string]*string
 }
 
 type Source struct {
-	Path        string
-	Destination Destination
+	Path        *string
+	Destination *Destination
 }
 
 type Config struct {
-	Sources []Source
+	Backends map[string]*Backend
+	Sources  []*Source
 }
 
 func Parse(filename string) (*Config, error) {
@@ -33,9 +37,14 @@ func Parse(filename string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	var config Config
-	if err = yaml.Unmarshal(buffer, &config); err != nil {
+	var cfg Config
+	if err = yaml.Unmarshal(buffer, &cfg); err != nil {
 		return nil, err
 	}
-	return &config, nil
+	for _, source := range cfg.Sources {
+		if cfg.Backends[*source.Destination.Backend] == nil {
+			return nil, errors.New("Backend not configured: " + *source.Destination.Backend)
+		}
+	}
+	return &cfg, nil
 }

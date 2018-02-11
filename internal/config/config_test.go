@@ -20,19 +20,36 @@ func isYamlError(err error) bool {
 	return false
 }
 
+func isBadBackend(err error) bool {
+	return err.Error() == "Backend not configured: Google Drive"
+}
+
+const (
+	backendName = "Google Drive"
+	backendType = "googleDrive"
+)
+
+func newConfig(backends map[string]*Backend, sourcesPath string, destFolder string, encrypt bool) Config {
+	dest := &Destination{addrOf(backendName), &destFolder, encrypt}
+	source := &Source{&sourcesPath, dest}
+	config := Config{backends, []*Source{source}}
+	return config
+}
+
 func TestParse(t *testing.T) {
 	tests := []struct {
 		file     string
 		expected Config
 		isError  func (error) bool
 	}{
-		{"minimal.yml", Config{[]Source{{"/home/me/Documents", Destination{"googleDrive", "Backups/me", false, nil}}}}, nil},
-		{"encrypt.yml", Config{[]Source{{"/home/me/Documents", Destination{"googleDrive", "Backups/me", true, nil}}}}, nil},
-		{"destinationConfig.yml",
-			Config{[]Source{{"/home/me/Documents", Destination{"googleDrive", "Backups/me", false,
-				map[string]*string{"clientConfig": addrOf("gd_client_secret.json")}}}}}, nil},
+		{"minimal.yml", newConfig(map[string]*Backend{backendName: {backendType, nil}}, "/home/me/Documents", "Backups/me", false), nil},
+		{"encrypt.yml", newConfig(map[string]*Backend{backendName: {backendType, nil}}, "/home/me/Documents", "Backups/me", true), nil},
+		{"destinationConfig.yml", newConfig(
+			map[string]*Backend{backendName: {backendType, map[string]*string{"clientConfig": addrOf("gd_client_secret.json")}}},
+			"/home/me/Documents", "Backups/me", false), nil},
 		{"no file", Config{}, os.IsNotExist},
 		{"invalid.yml", Config{}, isYamlError},
+		{"bad_backend.yml", Config{}, isBadBackend},
 	}
 
 	for _, test := range tests {
@@ -40,18 +57,16 @@ func TestParse(t *testing.T) {
 			actual, err := Parse(filepath.Join("testdata", test.file))
 			if test.isError == nil {
 				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
+					t.Errorf("Unexpected error: %#v", err)
+				}
+				if !reflect.DeepEqual(actual.Backends, test.expected.Backends) {
+					t.Errorf("Expected\n%#v to equal\n%#v", actual.Backends, test.expected.Backends)
 				}
 				if !reflect.DeepEqual(actual.Sources, test.expected.Sources) {
-					t.Errorf("Expected %v to equal %v", actual.Sources, test.expected.Sources)
-				}
-				if test.expected.Sources[0].Destination.Config != nil {
-					if actual.Sources[0].Destination.Config["random"] != nil {
-						t.Errorf("Expected %s to be nil", actual.Sources[0].Destination.Config["random"])
-					}
+					t.Errorf("Expected\n%#v to equal\n%#v", actual.Sources, test.expected.Sources)
 				}
 			} else if ! test.isError(err) {
-				t.Errorf("Not the expected error for \"%s\": %v", test.file, err)
+				t.Errorf("Not the expected error for \"%s\": %#v", test.file, err)
 			}
 		})
 	}

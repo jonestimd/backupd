@@ -1,9 +1,8 @@
 backends:
-  Google Drive:
+  Not Google Drive:
     type: googleDrive
 sources:
 - path: /home/me/Documents
   destination:
     backend: Google Drive
     folder: Backups/me
-    encrypt: true

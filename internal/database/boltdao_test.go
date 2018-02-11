@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	bolt "github.com/coreos/bbolt"
@@ -24,60 +23,7 @@ func init() {
 	nonemptyDbFile = filepath.Join(dataDir, "non-empty.db")
 }
 
-func TestGetFile(t *testing.T) {
-	b := makeFileBucket(&remoteFile{Name: "existing", Size: 123})
-	tests := []struct {
-		description string
-		fileId      string
-		expected    *remoteFile
-	}{
-		{"existing file", "existing", toRemoteFile(b.keyValues["existing"])},
-		{"non-existing file", "unknown", nil},
-	}
-
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
-			actual := getFile(b, &test.fileId)
-			if !reflect.DeepEqual(actual, test.expected) {
-				t.Errorf("Expected remoteFile %v to equal %v", actual, test.expected)
-			}
-		})
-	}
-}
-
-func TestGetPath(t *testing.T) {
-	tests := []struct {
-		description string
-		bucket      *mockBucket
-		expected    []string
-	}{
-		{"unknown file", makeFileBucket(&remoteFile{Name: "unknown"}), []string{}},
-		{"nil parents", makeFileBucket(&remoteFile{Name: "file1"}), []string{"/file1"}},
-		{"empty parents", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{}}), []string{"/file1"}},
-		{"unknown parent", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), []string{"/file1"}},
-		{"one parent", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
-			&remoteFile{Name: "parent", ParentIds: []string{"gp"}}), []string{"/parent/file1"}},
-		{"parent with empty parents", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
-			&remoteFile{Name: "parent", ParentIds: []string{}}), []string{"/parent/file1"}},
-		{"two parents", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent1", "parent2"}},
-			&remoteFile{Name: "parent1", ParentIds: []string{"gp"}},
-			&remoteFile{Name: "parent2", ParentIds: []string{"gp"}}), []string{"/parent1/file1", "/parent2/file1"}},
-	}
-
-	for _, test := range tests {
-		t.Run(test.description, func(t *testing.T) {
-			actual := getPaths(test.bucket, "file1")
-			if !reflect.DeepEqual(actual, test.expected) {
-				t.Errorf("Expected paths %v to equal %v", actual, test.expected)
-			}
-		})
-	}
-}
-
-func TestIsEmpty(t *testing.T) {
+func TestBoltDao_IsEmpty(t *testing.T) {
 	tests := []struct {
 		description string
 		dbFile      string
@@ -102,7 +48,7 @@ func TestIsEmpty(t *testing.T) {
 	}
 }
 
-func TestView(t *testing.T) {
+func TestBoltDao_View(t *testing.T) {
 	dao, err := OpenBoltDb(nonemptyDbFile)
 	if err != nil {
 		t.Errorf("Unexpected error from open: %v", err)
@@ -115,7 +61,7 @@ func TestView(t *testing.T) {
 	})
 
 	if err != cbError {
-		t.Errorf("Expected callback error")
+		t.Error("Expected callback error")
 	}
 }
 
@@ -128,14 +74,16 @@ func removeTestDb(t *testing.T, dao Dao) {
 	}
 }
 
-func TestUpdateCreatesBuckets(t *testing.T) {
+func TestBoltDao_Update_CreatesBuckets(t *testing.T) {
 	dao, err := OpenBoltDb(testDbFile)
 	if err != nil {
 		t.Error("Couldn't open test.db")
 	} else {
 		defer removeTestDb(t, dao)
 
-		dao.Update(func(tx Transaction) error { return nil })
+		dao.Update(func(tx Transaction) error {
+			return nil
+		})
 
 		dao.db.View(func(tx *bolt.Tx) error {
 			if tx.Bucket([]byte(byIdBucket)) == nil {
@@ -149,7 +97,7 @@ func TestUpdateCreatesBuckets(t *testing.T) {
 	}
 }
 
-func TestUpdateCommits(t *testing.T) {
+func TestBoltDao_Update_Commits(t *testing.T) {
 	dao, err := OpenBoltDb(testDbFile)
 	if err != nil {
 		t.Error("Couldn't open test.db")
@@ -179,7 +127,7 @@ func TestUpdateCommits(t *testing.T) {
 	}
 }
 
-func TestUpdateRollsbackOnError(t *testing.T) {
+func TestBoltDao_Update_RollsBackOnError(t *testing.T) {
 	dao, err := OpenBoltDb(testDbFile)
 	if err != nil {
 		t.Error("Couldn't open test.db")
@@ -203,5 +151,39 @@ func TestUpdateRollsbackOnError(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
+	}
+}
+
+func TestBoltDao_FindByPath(t *testing.T) {
+	tests := []struct {
+		description string
+		path        string
+		record      *remoteFile
+	}{
+		{"file exists", "/remote/file", &remoteFile{}},
+		{"file does not exist", "/unknown/file", nil},
+	}
+
+	dao, err := OpenBoltDb(testDbFile)
+	if err != nil {
+		t.Error("Couldn't open test.db")
+	} else {
+		defer removeTestDb(t, dao)
+		dao.db.Update(func(tx *bolt.Tx) error {
+			byPath, _ := tx.CreateBucket([]byte(byPathBucket))
+			byPath.Put([]byte(tests[0].path), []byte("fileId"))
+			byId, _ := tx.CreateBucket([]byte(byIdBucket))
+			byId.Put([]byte("fileId"), toBytes(tests[0].record))
+			return nil
+		})
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			rf := dao.FindByPath(test.path)
+			if rf == nil && test.record != nil {
+				t.Fatal("Expected record but got nil")
+			}
+		})
 	}
 }

@@ -1,5 +1,8 @@
+backends:
+  Google Drive:
+    type: googleDrive
 sources:
 - path: /home/me/Documents
   destination:
-    type: googleDrive
+    backend: Google Drive
     folder: Backups/me

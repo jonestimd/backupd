@@ -1,7 +1,12 @@
-sources:
-- path: /home/me/Documents
-  destination:
+backends:
+  Google Drive:
     type: googleDrive
-    folder: Backups/me
     config:
       clientConfig: gd_client_secret.json
+sources:
+- path: /home/me/Documents
+  backend: # ignored
+    type: other
+  destination:
+    backend: Google Drive
+    folder: Backups/me

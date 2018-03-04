@@ -4,11 +4,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"fmt"
 )
 
 type FileId struct {
 	FsId string
 	Ino  uint64
+}
+
+func (id *FileId) String() string {
+	return fmt.Sprintf("%s-%016x", id.FsId, id.Ino)
 }
 
 func ListDirectories(path string, ch chan string) {

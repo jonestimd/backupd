@@ -15,11 +15,13 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
+	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 const (
 	defaultSecretFile = "gd_client_secret.json"
 	defaultTokenFile = "gd_token.json"
+	defaultDataFile = "googleDrive.db"
 	defaultFolderMimeType = "application/vnd.google-apps.folder"
 	defaultRootFolderId = "root"
 	fileFields = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
@@ -162,27 +164,30 @@ func insertFile(tx database.Transaction, f *drive.File) error {
 	return nil
 }
 
-func (gd *googleDrive) Status(path string) *remoteStatus {
-	if rf := gd.dao.FindByPath(path); rf != nil {
-		return &remoteStatus{true, rf.Size, rf.Md5Checksum, rf.LastModified}
-	}
-	return &remoteStatus{Exists: false}
-}
-
-func (gd *googleDrive) Store(path string) {
-	log.Printf("Upload %s\n", path)
-}
-
 func (gd *googleDrive) listFiles(cb func(*drive.FileList) error) error {
 	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)
 }
 
-func (gd *googleDrive) ListFiles() {
-	gd.dao.View(func(tx database.Transaction) error {
-		tx.ForEachPath(func(path string, fileId string) error {
-			fmt.Println(path)
-			return nil
-		})
-		return nil
-	})
+// Backup a new file.
+func (gd *googleDrive) store(localPath *string, fileId *filesys.FileId) {
+	log.Printf("Store %s\n", *localPath)
+	//gd.dao.Update(func(tx database.Transaction) error {
+	//	file := &drive.File{Id: fileId.String()}
+	//	return insertFile(tx, file)
+	//})
+}
+
+// Update the backup for an existing file.
+func (gd *googleDrive) update(localPath *string) {
+	log.Printf("Update %s\n", *localPath)
+}
+
+// Update the location and/or name of a file.
+func (gd *googleDrive) move(localPath *string, rf *database.RemoteFile) {
+	log.Printf("Move %s to %s\n", *localPath, rf.Name)
+}
+
+// Move a backup to the trash folder.
+func (gd *googleDrive) trash(localPath *string) {
+	log.Printf("Trash %s\n", *localPath)
 }

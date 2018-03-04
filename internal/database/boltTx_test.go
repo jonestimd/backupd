@@ -11,7 +11,7 @@ func TestBoltTx_InsertFile(t *testing.T) {
 	modifiedDate := "2018-01-01"
 	b := makeFileBucket()
 	tx := boltTx{b, nil}
-	file := remoteFile{"name", 16, &md5checksum, []string{"parentId"}, &modifiedDate, nil}
+	file := RemoteFile{"name", 16, &md5checksum, []string{"parentId"}, &modifiedDate, nil}
 
 	tx.InsertFile(fileId, file.Name, file.Size, file.Md5Checksum, file.ParentIds, *file.LastModified, nil)
 
@@ -27,8 +27,8 @@ func checkPath(t *testing.T, expected string, actual string) {
 }
 
 func TestBoltTx_SetPaths(t *testing.T) {
-	parent := remoteFile{"parent", 16, nil, []string{"rootId"}, nil, nil}
-	file := remoteFile{"name", 16, nil, []string{"parent"}, nil, nil}
+	parent := RemoteFile{"parent", 16, nil, []string{"rootId"}, nil, nil}
+	file := RemoteFile{"name", 16, nil, []string{"parent"}, nil, nil}
 	fileBucket := makeFileBucket(&file, &parent)
 	pathBucket := makeMockBucket()
 	tx := boltTx{fileBucket, pathBucket}
@@ -76,20 +76,20 @@ func TestGetPath(t *testing.T) {
 		bucket      *mockBucket
 		expected    []string
 	}{
-		{"unknown file", makeFileBucket(&remoteFile{Name: "unknown"}), []string{}},
-		{"nil parents", makeFileBucket(&remoteFile{Name: "file1"}), []string{"/file1"}},
-		{"empty parents", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{}}), []string{"/file1"}},
-		{"unknown parent", makeFileBucket(&remoteFile{Name: "file1", ParentIds: []string{"parent"}}), []string{"/file1"}},
+		{"unknown file", makeFileBucket(&RemoteFile{Name: "unknown"}), []string{}},
+		{"nil parents", makeFileBucket(&RemoteFile{Name: "file1"}), []string{"/file1"}},
+		{"empty parents", makeFileBucket(&RemoteFile{Name: "file1", ParentIds: []string{}}), []string{"/file1"}},
+		{"unknown parent", makeFileBucket(&RemoteFile{Name: "file1", ParentIds: []string{"parent"}}), []string{"/file1"}},
 		{"one parent", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
-			&remoteFile{Name: "parent", ParentIds: []string{"gp"}}), []string{"/parent/file1"}},
+			&RemoteFile{Name: "file1", ParentIds: []string{"parent"}},
+			&RemoteFile{Name: "parent", ParentIds: []string{"gp"}}), []string{"/parent/file1"}},
 		{"parent with empty parents", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent"}},
-			&remoteFile{Name: "parent", ParentIds: []string{}}), []string{"/parent/file1"}},
+			&RemoteFile{Name: "file1", ParentIds: []string{"parent"}},
+			&RemoteFile{Name: "parent", ParentIds: []string{}}), []string{"/parent/file1"}},
 		{"two parents", makeFileBucket(
-			&remoteFile{Name: "file1", ParentIds: []string{"parent1", "parent2"}},
-			&remoteFile{Name: "parent1", ParentIds: []string{"gp"}},
-			&remoteFile{Name: "parent2", ParentIds: []string{"gp"}}), []string{"/parent1/file1", "/parent2/file1"}},
+			&RemoteFile{Name: "file1", ParentIds: []string{"parent1", "parent2"}},
+			&RemoteFile{Name: "parent1", ParentIds: []string{"gp"}},
+			&RemoteFile{Name: "parent2", ParentIds: []string{"gp"}}), []string{"/parent1/file1", "/parent2/file1"}},
 	}
 
 	for _, test := range tests {
@@ -103,11 +103,11 @@ func TestGetPath(t *testing.T) {
 }
 
 func TestGetFile(t *testing.T) {
-	b := makeFileBucket(&remoteFile{Name: "existing", Size: 123})
+	b := makeFileBucket(&RemoteFile{Name: "existing", Size: 123})
 	tests := []struct {
 		description string
 		fileId      string
-		expected    *remoteFile
+		expected    *RemoteFile
 	}{
 		{"existing file", "existing", toRemoteFile(b.keyValues["existing"])},
 		{"non-existing file", "unknown", nil},

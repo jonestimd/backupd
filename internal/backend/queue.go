@@ -10,8 +10,6 @@ type Action int
 const (
 	StoreAction  Action = iota + 1
 	UpdateAction
-	RenameAction
-	MoveAction
 	TrashAction
 )
 

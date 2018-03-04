@@ -24,7 +24,7 @@ func makeMockBucket() *mockBucket {
 	return &mockBucket{make(map[string][]byte)}
 }
 
-func makeFileBucket(files ...*remoteFile) *mockBucket {
+func makeFileBucket(files ...*RemoteFile) *mockBucket {
 	b := makeMockBucket()
 	for _, file := range files {
 		b.keyValues[file.Name] = toBytes(file)

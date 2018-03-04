@@ -158,9 +158,9 @@ func TestBoltDao_FindByPath(t *testing.T) {
 	tests := []struct {
 		description string
 		path        string
-		record      *remoteFile
+		record      *RemoteFile
 	}{
-		{"file exists", "/remote/file", &remoteFile{}},
+		{"file exists", "/remote/file", &RemoteFile{}},
 		{"file does not exist", "/unknown/file", nil},
 	}
 

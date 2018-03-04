@@ -4,6 +4,7 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 const (
@@ -56,8 +57,8 @@ func (dao *boltDao) Update(cb func(Transaction) error) error {
 	})
 }
 
-func (dao *boltDao) FindByPath(path string) *remoteFile {
-	var rf *remoteFile
+func (dao *boltDao) FindByPath(path string) *RemoteFile {
+	var rf *RemoteFile
 	dao.db.View(func (tx *bolt.Tx) error {
 		if fileId := tx.Bucket([]byte(byPathBucket)).Get([]byte(path)); fileId != nil {
 			rf = toRemoteFile(tx.Bucket([]byte(byIdBucket)).Get(fileId))
@@ -65,4 +66,14 @@ func (dao *boltDao) FindByPath(path string) *remoteFile {
 		return nil
 	})
 	return rf
+}
+
+func (dao *boltDao) FindById(fileId *filesys.FileId) (rf *RemoteFile) {
+	dao.db.View(func (tx *bolt.Tx) error {
+		if rec := tx.Bucket([]byte(byIdBucket)).Get([]byte(fileId.String())); rec != nil {
+			rf = toRemoteFile(rec)
+		}
+		return nil
+	})
+	return
 }

@@ -1,24 +1,32 @@
 package backend
 
 import (
-	"github.com/jonestimd/backupd/internal/config"
 	"errors"
-	"github.com/jonestimd/backupd/internal/database"
-	"os"
+	"fmt"
 	"log"
-)
+	"os"
+	"time"
 
-const (
-	defaultDataFile = "backupd.db"
+	"github.com/jonestimd/backupd/internal/config"
+	"github.com/jonestimd/backupd/internal/database"
+	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 type remoteStatus struct {
 	Exists       bool
 	Size         uint64
 	Md5Checksum  *string
-	LastModified *string
+	LastModified time.Time
 }
 
+type backupService interface {
+	store(localPath *string, fileId *filesys.FileId)
+	update(localPath *string)
+	move(newLocalPath *string, rf *database.RemoteFile)
+	trash(localPath *string)
+}
+
+// TODO private?
 type Backend struct {
 	queue *queue
 	dao   database.Dao
@@ -42,6 +50,7 @@ func Connect(configDir *string, dataDir *string, cfg *config.Config) ([]*Destina
 				return nil, err
 			}
 			backends[name] = &gd.Backend
+			go gd.processQueue(gd)
 		default:
 			return nil, errors.New("Unknown destination type: " + cfg.Type)
 		}
@@ -92,19 +101,47 @@ func (d *Destination) Update(localPath string) {
 }
 
 // Notification that the file has been deleted.  Moves the backup copy to the trash folder (maybe).
-func (d *Destination) Rename(localPath string, newName string) {
-	remotePath := d.remotePath(localPath)
-	d.backend.queue.Add(&message{&newName, &remotePath, RenameAction})
-}
-
-// Notification that the file has been deleted.  Moves the backup copy to the trash folder (maybe).
-func (d *Destination) Move(localPath string, newName string) {
-	remotePath := d.remotePath(localPath)
-	d.backend.queue.Add(&message{&newName, &remotePath, MoveAction})
-}
-
-// Notification that the file has been deleted.  Moves the backup copy to the trash folder (maybe).
 func (d *Destination) Delete(localPath string) {
 	remotePath := d.remotePath(localPath)
 	d.backend.queue.Add(&message{&localPath, &remotePath, TrashAction})
+}
+
+func (b *Backend) ListFiles() {
+	b.dao.View(func(tx database.Transaction) error {
+		tx.ForEachPath(func(path string, fileId string) error {
+			fmt.Println(path)
+			return nil
+		})
+		return nil
+	})
+}
+
+func (b *Backend) Status(path string) *remoteStatus {
+	if rf := b.dao.FindByPath(path); rf != nil {
+		return &remoteStatus{true, rf.Size, rf.Md5Checksum, rf.ModTime()}
+	}
+	return &remoteStatus{Exists: false}
+}
+
+func (b *Backend) processQueue(service backupService) {
+	// TODO handle shutdown
+	for {
+		m := b.queue.Get()
+		switch m.action {
+		case StoreAction:
+			if fileId, err := filesys.Stat(*m.local); err == nil {
+				if rf := b.dao.FindById(fileId); rf != nil {
+					service.move(m.local, rf)
+				} else {
+					service.store(m.local, fileId)
+				}
+			} else {
+				log.Printf("Can't stat %s\n", m.local)
+			}
+		case UpdateAction:
+			service.update(m.local)
+		case TrashAction:
+			service.trash(m.local)
+		}
+	}
 }

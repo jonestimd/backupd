@@ -2,8 +2,6 @@ package database
 
 import (
 	"path/filepath"
-	"bytes"
-	"encoding/gob"
 )
 
 type boltTx struct {
@@ -12,7 +10,7 @@ type boltTx struct {
 }
 
 func (tx *boltTx) InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error {
-	rf := remoteFile{name, size, md5checksum, parentIds, &lastModified, localId}
+	rf := RemoteFile{name, size, md5checksum, parentIds, &lastModified, localId}
 	return tx.byId.Put([]byte(id), toBytes(&rf))
 }
 
@@ -64,29 +62,10 @@ func getPaths(byId bucket, fileId string) []string {
 	return paths
 }
 
-func getFile(b bucket, key *string) *remoteFile {
+func getFile(b bucket, key *string) *RemoteFile {
 	buf := b.Get([]byte(*key))
 	if buf == nil {
 		return nil
 	}
 	return toRemoteFile(buf)
-}
-
-func toRemoteFile(b []byte) *remoteFile {
-	rf := remoteFile{}
-	buf := bytes.NewBuffer(b)
-	dec := gob.NewDecoder(buf)
-	if err := dec.Decode(&rf); err != nil {
-		panic(err)
-	}
-	return &rf
-}
-
-func toBytes(rf *remoteFile) []byte {
-	buf := bytes.Buffer{}
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(rf); err != nil {
-		panic(err)
-	}
-	return buf.Bytes()
 }

@@ -7,26 +7,8 @@ package database
 
 import (
 	"io"
-	"time"
+	"github.com/jonestimd/backupd/internal/filesys"
 )
-
-// Cache record for a remote file.
-type remoteFile struct {
-	Name         string
-	Size         uint64
-	Md5Checksum  *string
-	ParentIds    []string
-	LastModified *string
-	LocalId      *string
-}
-
-func (rf *remoteFile) ModTime() time.Time {
-	t, err := time.Parse(time.RFC3339, *rf.LastModified)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
-}
 
 type Transaction interface {
 	InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error
@@ -38,7 +20,8 @@ type Dao interface {
 	IsEmpty() bool
 	Update(func(Transaction) error) error
 	View(func(Transaction) error) error
-	FindByPath(path string) *remoteFile
+	FindByPath(path string) *RemoteFile
+	FindById(id *filesys.FileId) *RemoteFile
 	io.Closer
 }
 

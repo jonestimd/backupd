@@ -30,7 +30,7 @@ func startMonitor(dest *backend.Destination) {
 		os.Exit(1)
 	}
 	//defer watcher.Close()
-	go handleFileChanges(watcher)
+	go handleFileChanges(watcher, dest)
 
 	// TODO look for config files, handle ignored files
 	// TODO don't use Walk?  Is it too slow (due to sorting)?
@@ -50,25 +50,21 @@ func startMonitor(dest *backend.Destination) {
 	})
 }
 
-func handleFileChanges(watcher *fsnotify.Watcher) {
+func handleFileChanges(watcher *fsnotify.Watcher, dest *backend.Destination) {
 	for {
 		select {
 		case event := <-watcher.Events:
 			log.Println("event:", event)
-			if event.Op & fsnotify.Write == fsnotify.Write {
-				log.Println("modified file:", event.Name)
+			if event.Op & fsnotify.Write == fsnotify.Write { // TODO is file still open?
+				dest.Update(event.Name)
 				printKey(event.Name)
 			}
 			if event.Op & fsnotify.Remove == fsnotify.Remove {
-				log.Println("Removed file:", event.Name)
+				dest.Delete(event.Name)
 				printKey(event.Name)
 			}
-			if event.Op & fsnotify.Create == fsnotify.Create {
-				log.Println("created file:", event.Name)
-				printKey(event.Name)
-			}
-			if event.Op & fsnotify.Rename == fsnotify.Rename {
-				log.Println("Renamed file:", event.Name)
+			if event.Op & fsnotify.Create == fsnotify.Create { // TODO is file still open?
+				dest.Add(event.Name)
 				printKey(event.Name)
 			}
 		case err := <-watcher.Errors:

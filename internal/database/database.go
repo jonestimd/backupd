@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package database provides caching of data for a remote destination.
+// Cached info can be retrieved by local file ID or by remote path.
 package database
 
 import (
@@ -11,7 +12,7 @@ import (
 )
 
 type Transaction interface {
-	InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error
+	InsertFile(remoteId string, mimeType string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error
 	SetPaths() error
 	ForEachPath(func(path string, fileId string) error) error
 }
@@ -20,7 +21,7 @@ type Dao interface {
 	IsEmpty() bool
 	Update(func(Transaction) error) error
 	View(func(Transaction) error) error
-	FindByPath(path string) *RemoteFile
+	FindByPath(remotePath string) *RemoteFile
 	FindById(id *filesys.FileId) *RemoteFile
 	io.Closer
 }

@@ -9,11 +9,13 @@ import (
 // Cache record for a remote file.
 type RemoteFile struct {
 	Name         string
+	MimeType     string
 	Size         uint64
 	Md5Checksum  *string
-	ParentIds    []string
+	ParentIds    []string // remote IDs of the file's parents
 	LastModified *string
 	LocalId      *string
+	RemoteId     *string
 }
 
 func toRemoteFile(b []byte) *RemoteFile {

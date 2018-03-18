@@ -5,20 +5,21 @@ import (
 )
 
 type boltTx struct {
-	byId   bucket
-	byPath bucket
+	byRemoteId   bucket
+	byRemotePath bucket
 }
 
-func (tx *boltTx) InsertFile(id string, name string, size uint64, md5checksum *string, parentIds []string, lastModified string, localId *string) error {
-	rf := RemoteFile{name, size, md5checksum, parentIds, &lastModified, localId}
-	return tx.byId.Put([]byte(id), toBytes(&rf))
+func (tx *boltTx) InsertFile(remoteId string, name string, mimeType string, size uint64, md5checksum *string,
+							 parentIds []string, lastModified string, localId *string) error {
+	rf := RemoteFile{name, mimeType, size, md5checksum, parentIds, &lastModified, localId, &remoteId}
+	return tx.byRemoteId.Put([]byte(remoteId), toBytes(&rf))
 }
 
 func (tx *boltTx) SetPaths() error {
-	return tx.byId.ForEach(func(id, value []byte) error {
-		paths := getPaths(tx.byId, string(id))
+	return tx.byRemoteId.ForEach(func(id, value []byte) error {
+		paths := getPaths(tx.byRemoteId, string(id))
 		for _, path := range paths {
-			if err := tx.byPath.Put([]byte(path), id); err != nil {
+			if err := tx.byRemotePath.Put([]byte(path), id); err != nil {
 				return err
 			}
 		}
@@ -27,7 +28,7 @@ func (tx *boltTx) SetPaths() error {
 }
 
 func (tx *boltTx) ForEachPath(cb func(path string, fileId string) error) error {
-	return tx.byPath.ForEach(func(key []byte, value []byte) error {
+	return tx.byRemotePath.ForEach(func(key []byte, value []byte) error {
 		return cb(string(key), string(value))
 	})
 }

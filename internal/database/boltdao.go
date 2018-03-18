@@ -57,10 +57,10 @@ func (dao *boltDao) Update(cb func(Transaction) error) error {
 	})
 }
 
-func (dao *boltDao) FindByPath(path string) *RemoteFile {
+func (dao *boltDao) FindByPath(remotePath string) *RemoteFile {
 	var rf *RemoteFile
 	dao.db.View(func (tx *bolt.Tx) error {
-		if fileId := tx.Bucket([]byte(byPathBucket)).Get([]byte(path)); fileId != nil {
+		if fileId := tx.Bucket([]byte(byPathBucket)).Get([]byte(remotePath)); fileId != nil {
 			rf = toRemoteFile(tx.Bucket([]byte(byIdBucket)).Get(fileId))
 		}
 		return nil

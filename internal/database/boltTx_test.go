@@ -6,17 +6,19 @@ import (
 )
 
 func TestBoltTx_InsertFile(t *testing.T) {
-	fileId := "fileId"
+	remoteId := "remoteId"
+	mimeType := "text/plain"
+	localId := "localId"
 	md5checksum := "md5checksum"
 	modifiedDate := "2018-01-01"
 	b := makeFileBucket()
 	tx := boltTx{b, nil}
-	file := RemoteFile{"name", 16, &md5checksum, []string{"parentId"}, &modifiedDate, nil}
+	file := RemoteFile{"name", mimeType, 16, &md5checksum, []string{"parentId"}, &modifiedDate, &localId, &remoteId}
 
-	tx.InsertFile(fileId, file.Name, file.Size, file.Md5Checksum, file.ParentIds, *file.LastModified, nil)
+	tx.InsertFile(remoteId, file.Name, mimeType, file.Size, file.Md5Checksum, file.ParentIds, *file.LastModified, &localId)
 
-	if !reflect.DeepEqual(toBytes(&file), b.keyValues[fileId]) {
-		t.Errorf("Expected remoteFile %v to equal %v", toRemoteFile(b.keyValues[fileId]), file)
+	if !reflect.DeepEqual(toBytes(&file), b.keyValues[remoteId]) {
+		t.Errorf("Expected remoteFile %v to equal %v", toRemoteFile(b.keyValues[remoteId]), file)
 	}
 }
 
@@ -27,8 +29,8 @@ func checkPath(t *testing.T, expected string, actual string) {
 }
 
 func TestBoltTx_SetPaths(t *testing.T) {
-	parent := RemoteFile{"parent", 16, nil, []string{"rootId"}, nil, nil}
-	file := RemoteFile{"name", 16, nil, []string{"parent"}, nil, nil}
+	parent := RemoteFile{"parent", "text/plain", 16, nil, []string{"rootId"}, nil, nil, nil}
+	file := RemoteFile{"name", "text/plain", 16, nil, []string{"parent"}, nil, nil, nil}
 	fileBucket := makeFileBucket(&file, &parent)
 	pathBucket := makeMockBucket()
 	tx := boltTx{fileBucket, pathBucket}

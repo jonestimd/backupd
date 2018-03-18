@@ -104,8 +104,9 @@ func TestBoltDao_Update_Commits(t *testing.T) {
 	} else {
 		defer removeTestDb(t, dao)
 
+		remoteId := "remoteId"
 		err := dao.Update(func(tx Transaction) error {
-			if err := tx.InsertFile("fileId", "name", 16, nil, nil, "1970-01-01", nil); err != nil {
+			if err := tx.InsertFile(remoteId, "text/plain", "name", 16, nil, nil, "1970-01-01", nil); err != nil {
 				return err
 			}
 			return nil
@@ -115,7 +116,7 @@ func TestBoltDao_Update_Commits(t *testing.T) {
 			t.Errorf("Unexpected error from Update: %v", err)
 		}
 		err = dao.db.View(func(tx *bolt.Tx) error {
-			file := tx.Bucket([]byte(byIdBucket)).Get([]byte("fileId"))
+			file := tx.Bucket([]byte(byIdBucket)).Get([]byte(remoteId))
 			if file == nil {
 				t.Error("Expected file to be saved")
 			}

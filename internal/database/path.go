@@ -7,11 +7,11 @@ import (
 // Internal struct for building file paths.
 type pathNode struct {
 	names  []string // path node names in bottom-up order (child, parent, ...)
-	nextId *string  // node ID of one of the path's parents
+	nextID *string  // node ID of one of the path's parents
 }
 
-func newPathNode(names []string, parentId *string) *pathNode {
-	return &pathNode{names, parentId}
+func newPathNode(names []string, parentID *string) *pathNode {
+	return &pathNode{names, parentID}
 }
 
 func (path *pathNode) String() string {
@@ -22,6 +22,6 @@ func (path *pathNode) String() string {
 	return string(filepath.Separator) + filepath.Join(reorder...)
 }
 
-func (path *pathNode) append(name string, nextId *string) *pathNode {
-	return newPathNode(append(path.names, name), nextId)
+func (path *pathNode) append(name string, nextID *string) *pathNode {
+	return newPathNode(append(path.names, name), nextID)
 }

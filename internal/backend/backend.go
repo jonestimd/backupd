@@ -3,6 +3,7 @@ package backend
 import (
 	"log"
 	"os"
+	"sync"
 
 	"path/filepath"
 	"time"
@@ -41,7 +42,7 @@ var defaultDataFile = map[string]string{
 }
 
 // Connect initializes the backends.
-func Connect(configDir *string, dataDir *string, backupConfig *config.Config) []*Destination {
+func Connect(configDir *string, dataDir *string, backupConfig *config.Config, wg *sync.WaitGroup, halt chan bool) []*Destination {
 	backends := make(map[string]*backend)
 	for name, cfg := range backupConfig.Backends {
 		factory := serviceFactories[cfg.Type]
@@ -51,6 +52,7 @@ func Connect(configDir *string, dataDir *string, backupConfig *config.Config) []
 				panic(err)
 			}
 			backends[name] = newBackend(srv, dataDir, cfg)
+			go backends[name].processQueue(wg, halt)
 		} else {
 			log.Println("Unknown destination type: " + cfg.Type)
 		}
@@ -71,9 +73,9 @@ func newBackend(srv backupService, dataDir *string, cfg *config.Backend) *backen
 	return &backend{queue: NewQueue(), cache: cache, srv: srv}
 }
 
-func (b *backend) processQueue() {
-	// TODO handle shutdown
-	for {
+func (b *backend) processQueue(wg *sync.WaitGroup, halt chan bool) {
+	wg.Add(1)
+	for _, ok := <-halt; !ok; _, ok = <-halt {
 		m := b.queue.Get()
 		switch m.action {
 		case StoreAction:
@@ -92,9 +94,10 @@ func (b *backend) processQueue() {
 			//service.trash(m.local)
 		}
 	}
+	wg.Done()
 }
 
-// Checks the status of the file and adds it to the backup queue if it has changed or if it has never been backed up.
+// Init checks the status of the file and adds it to the backup queue if it has changed or if it has never been backed up.
 // Used for startup.
 func (b *backend) Init(localPath string, remotePath string) {
 	rf := b.cache.FindByPath(remotePath)

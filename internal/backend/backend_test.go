@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"sync"
 	"testing"
 
 	"os"
@@ -65,9 +66,12 @@ func TestConnect(t *testing.T) {
 	}()
 	serviceFactories[config.GoogleDriveName] = mockServiceFactory
 	cfg := configuration("backend 1", "source dir", "dest dir")
+	var wg sync.WaitGroup
+	halt := make(chan bool)
 
-	dests := Connect(addrOf("config dir"), addrOf("testdata"), cfg)
+	dests := Connect(addrOf("config dir"), addrOf("testdata"), cfg, &wg, halt)
 
+	halt <- true
 	if len(dests) != 1 {
 		t.Errorf("Expected 1 destination, got %d", len(dests))
 	} else {
@@ -78,6 +82,7 @@ func TestConnect(t *testing.T) {
 		assert.Equal(t, "testdata", *srv.dataDir)
 		assert.Equal(t, cfg.Backends["backend 1"], srv.cfg)
 	}
+	wg.Wait()
 }
 
 var dbPath = filepath.Join("testdata", "test.db")

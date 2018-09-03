@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"os/signal"
+	"sync"
 
 	"os"
 	"path/filepath"
@@ -90,6 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	halt := make(chan bool)
 	configPath := filepath.Join(*configDir, configFileName)
 	cfg, err := config.Parse(configPath)
 	if err != nil {
@@ -101,12 +104,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	dests := backend.Connect(configDir, dataDir, cfg)
+	var backendThreads sync.WaitGroup
+	dests := backend.Connect(configDir, dataDir, cfg, &backendThreads, halt)
 	for _, d := range dests {
 		// TODO look for deleted files
 		startMonitor(d)
 	}
 
-	done := make(chan bool)
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, os.Kill)
 	<-done
+	halt <- true
+
+	log.Print("Waiting for incomplete actions")
+	backendThreads.Wait()
+	log.Println()
 }

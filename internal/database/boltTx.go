@@ -23,14 +23,18 @@ func (tx *boltTx) insertFile(remoteId string, name string, mimeType string, size
 
 func (tx *boltTx) SetPaths() error {
 	return tx.byRemoteID.ForEach(func(id, value []byte) error {
-		paths := getPaths(tx.byRemoteID, string(id))
-		for _, path := range paths {
-			if err := tx.byRemotePath.Put([]byte(path), id); err != nil {
-				return err
-			}
-		}
-		return nil
+		return tx.setPaths(string(id))
 	})
+}
+
+func (tx *boltTx) setPaths(remoteId string) error {
+	paths := getPaths(tx.byRemoteID, remoteId)
+	for _, path := range paths { // TODO remove obsolete paths
+		if err := tx.byRemotePath.Put([]byte(path), []byte(remoteId)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tx *boltTx) ForEachPath(cb func(path string, fileID string) error) error {

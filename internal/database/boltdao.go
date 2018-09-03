@@ -22,7 +22,7 @@ type FileOrError struct {
 	Error error
 }
 
-// Opens the specified data file.  If the database is empty then getFiles is used to populate it.
+// OpenDb opens the specified data file.  If the database is empty then getFiles is used to populate it.
 func OpenDb(fileName string, getFiles func() (chan FileOrError, error)) (*BoltDao, error) {
 	db, err := bolt.Open(fileName, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
@@ -68,6 +68,18 @@ func (dao *BoltDao) isEmpty() bool {
 	return isEmpty
 }
 
+// AddOrUpdate adds or updates the records for a file.
+func (dao *BoltDao) AddOrUpdate(remoteID string, name string, mimeType string, size uint64, md5checksum *string,
+	parentIDs []string, lastModified string, localID *string) error {
+	return dao.update(func(tx *boltTx) error {
+		err := tx.insertFile(remoteID, name, mimeType, size, md5checksum, parentIDs, lastModified, localID)
+		if err == nil {
+			err = tx.setPaths(remoteID)
+		}
+		return err
+	})
+}
+
 func (dao *BoltDao) update(cb func(*boltTx) error) error {
 	return dao.db.Update(func(tx *bolt.Tx) error {
 		byID, err := tx.CreateBucketIfNotExists([]byte(byIDBucket))
@@ -82,6 +94,7 @@ func (dao *BoltDao) update(cb func(*boltTx) error) error {
 	})
 }
 
+// FindByPath looks up a file record using the remote path.
 func (dao *BoltDao) FindByPath(remotePath string) *RemoteFile {
 	var rf *RemoteFile
 	dao.db.View(func(tx *bolt.Tx) error {
@@ -93,6 +106,7 @@ func (dao *BoltDao) FindByPath(remotePath string) *RemoteFile {
 	return rf
 }
 
+// FindByID looks up a file record using the local ID.
 func (dao *BoltDao) FindByID(fileID *filesys.FileID) (rf *RemoteFile) {
 	dao.db.View(func(tx *bolt.Tx) error {
 		if rec := tx.Bucket([]byte(byIDBucket)).Get([]byte(fileID.String())); rec != nil {

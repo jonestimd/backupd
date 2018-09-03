@@ -192,7 +192,7 @@ func removeTestDb(t *testing.T, dao *BoltDao) {
 	}
 }
 
-func TestBoltDao_Update_CreatesBuckets(t *testing.T) {
+func TestBoltDao_update_CreatesBuckets(t *testing.T) {
 	dao, err := OpenDb(testDbFile, nil)
 	if err != nil {
 		t.Error("Couldn't open test.db")
@@ -215,7 +215,7 @@ func TestBoltDao_Update_CreatesBuckets(t *testing.T) {
 	}
 }
 
-func TestBoltDao_Update_Commits(t *testing.T) {
+func TestBoltDao_update_Commits(t *testing.T) {
 	dao, err := OpenDb(testDbFile, nil)
 	if err != nil {
 		t.Error("Couldn't open test.db")
@@ -246,7 +246,7 @@ func TestBoltDao_Update_Commits(t *testing.T) {
 	}
 }
 
-func TestBoltDao_Update_RollsBackOnError(t *testing.T) {
+func TestBoltDao_update_RollsBackOnError(t *testing.T) {
 	dao, err := OpenDb(testDbFile, nil)
 	if err != nil {
 		t.Error("Couldn't open test.db")

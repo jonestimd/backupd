@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
 	"github.com/go-yaml/yaml"
+	"github.com/stretchr/testify/assert"
 )
 
 func addrOf(value string) *string {
@@ -40,7 +42,7 @@ func TestParse(t *testing.T) {
 	tests := []struct {
 		file     string
 		expected Config
-		isError  func (error) bool
+		isError  func(error) bool
 	}{
 		{"minimal.yml", newConfig(map[string]*Backend{backendName: {backendType, nil}}, "/home/me/Documents", "Backups/me", false), nil},
 		{"encrypt.yml", newConfig(map[string]*Backend{backendName: {backendType, nil}}, "/home/me/Documents", "Backups/me", true), nil},
@@ -65,9 +67,31 @@ func TestParse(t *testing.T) {
 				if !reflect.DeepEqual(actual.Sources, test.expected.Sources) {
 					t.Errorf("Expected\n%#v to equal\n%#v", actual.Sources, test.expected.Sources)
 				}
-			} else if ! test.isError(err) {
+			} else if !test.isError(err) {
 				t.Errorf("Not the expected error for \"%s\": %#v", test.file, err)
 			}
+		})
+	}
+}
+
+func TestGetParameter(t *testing.T) {
+	parameter := "the parameter"
+	defaultValue := "the default"
+	configValue := "config value"
+	tests := []struct {
+		name          string
+		expectedValue string
+		backend       *Backend
+	}{
+		{"returns default", defaultValue, &Backend{Config: map[string]*string{}}},
+		{"returns config value", configValue, &Backend{Config: map[string]*string{parameter: &configValue}}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := test.backend.GetParameter(parameter, defaultValue)
+
+			assert.Equal(t, test.expectedValue, actual)
 		})
 	}
 }

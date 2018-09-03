@@ -48,3 +48,11 @@ func Parse(filename string) (*Config, error) {
 	}
 	return &cfg, nil
 }
+
+func (b *Backend) GetParameter(key string, defaultValue string) string {
+	value := b.Config[key]
+	if value == nil {
+		return defaultValue
+	}
+	return *value
+}

@@ -10,7 +10,7 @@ func TestListDirectories(t *testing.T) {
 		startPath   string
 		expected    []string
 	}{
-		{"directory", "..", []string{"..", "../database", "../backend", "../config", "../filesys", "../database/testdata", "../config/testdata"}},
+		{"directory", "..", []string{"..", "../database", "../backend", "../config", "../filesys", "../database/testdata", "../backend/testdata", "../config/testdata"}},
 		{"file", "filesys.go", []string{}},
 		{"unknown", "x", []string{}},
 	}

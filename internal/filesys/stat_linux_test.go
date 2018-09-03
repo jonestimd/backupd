@@ -10,8 +10,8 @@ func TestStat(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
 	}
-	if len(info.FsId) != 16 {
-		t.Errorf("Expected FsId to be 16 chars")
+	if len(info.FsID) != 16 {
+		t.Errorf("Expected FsID to be 16 chars")
 	}
 
 	_, err = Stat("x")

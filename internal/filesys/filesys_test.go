@@ -38,10 +38,10 @@ func TestListDirectories(t *testing.T) {
 	}
 }
 
-func TestFileId_String(t *testing.T) {
-	fileId := &FileId{"file sys ID", 0xdeadbeefabacab}
+func TestFileID_String(t *testing.T) {
+	fileID := &FileID{"file sys ID", 0xdeadbeefabacab}
 
-	if fileId.String() != "file sys ID-00deadbeefabacab" {
-		t.Errorf("Wrong format for file ID: %s", fileId.String())
+	if fileID.String() != "file sys ID-00deadbeefabacab" {
+		t.Errorf("Wrong format for file ID: %s", fileID.String())
 	}
 }

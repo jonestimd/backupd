@@ -7,36 +7,42 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/jonestimd/backupd/internal/config"
 	"github.com/jonestimd/backupd/internal/database"
+	"github.com/jonestimd/backupd/internal/filesys"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
-	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 const (
-	defaultSecretFile = "gd_client_secret.json"
-	defaultTokenFile = "gd_token.json"
-	defaultDataFile = "googleDrive.db"
+	defaultSecretFile     = "gd_client_secret.json"
+	defaultTokenFile      = "gd_token.json"
 	defaultFolderMimeType = "application/vnd.google-apps.folder"
-	defaultRootFolderId = "root"
-	fileFields = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
+	defaultRootFolderID   = "root"
+	fileFields            = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
 )
 
-type googleDrive struct {
+// GoogleDrive provides backup to Google Drive.
+type GoogleDrive struct {
 	folderMimeType string
-	rootFolderId   string
+	rootFolderID   string
 	srv            *drive.Service
-	Backend
+}
+
+// PathMapper converts between local and remote file paths.
+type PathMapper interface {
+	RemotePath(localPath string) string
+	LocalPath(remotePath string) string
 }
 
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
-func getClient(tokenFile string, ctx context.Context, config *oauth2.Config) *http.Client {
+func getClient(ctx context.Context, tokenFile string, config *oauth2.Config) *http.Client {
 	tok, err := tokenFromFile(tokenFile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
@@ -49,8 +55,8 @@ func getClient(tokenFile string, ctx context.Context, config *oauth2.Config) *ht
 // It returns the retrieved Token.
 func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the " +
-			"authorization code: \n%v\n", authURL)
+	fmt.Printf("Go to the following link in your browser then type the "+
+		"authorization code: \n%v\n", authURL)
 
 	var code string
 	if _, err := fmt.Scan(&code); err != nil {
@@ -82,7 +88,7 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 // token in it.
 func saveToken(file string, token *oauth2.Token) {
 	fmt.Printf("Saving credential file to: %s\n", file)
-	f, err := os.OpenFile(file, os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0600)
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
@@ -90,34 +96,33 @@ func saveToken(file string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
+// Generates a credential file path/filename.  Creates the path if it does not exist.
+// Returns the generated path/filename.
+func tokenCacheFile(dataDir *string, tokenFile string) string {
+	tokenCacheDir := filepath.Join(*dataDir, ".auth")
+	os.MkdirAll(tokenCacheDir, 0700)
+	return filepath.Join(tokenCacheDir, tokenFile)
+}
+
 // Create a connection to Google Drive
-func newGoogleDrive(configDir *string, dataDir *string, cfg *config.Backend) (gd *googleDrive, err error) {
-	gd = &googleDrive{
-		folderMimeType: getParameter(cfg.Config, "folderMimeType", defaultFolderMimeType),
-		rootFolderId:   getParameter(cfg.Config, "rootFolderId", defaultRootFolderId),
-		Backend:        Backend{queue: NewQueue()},
+func newGoogleDrive(configDir *string, dataDir *string, cfg *config.Backend) (*GoogleDrive, error) {
+	gd := &GoogleDrive{
+		folderMimeType: cfg.GetParameter("folderMimeType", defaultFolderMimeType),
+		rootFolderID:   cfg.GetParameter("rootFolderId", defaultRootFolderID),
 	}
-	if err = gd.connect(configDir, dataDir, cfg); err != nil {
-		return
+	if err := gd.connect(configDir, dataDir, cfg); err != nil {
+		return nil, err
 	}
-	dataFile := filepath.Join(*dataDir, getParameter(cfg.Config, "dataFile", defaultDataFile))
-	if gd.dao, err = database.OpenBoltDb(dataFile); err != nil {
-		return
-	}
-	if gd.dao.IsEmpty() {
-		log.Printf("Populating files in %s\n", dataFile)
-		err = gd.dao.Update(gd.loadFiles)
-	}
-	return
+	return gd, nil
 }
 
 // Connect to google drive.
-func (gd *googleDrive) connect(configDir *string, dataDir *string, cfg *config.Backend) error {
-	tokenFile := tokenCacheFile(dataDir, getParameter(cfg.Config, "tokenFile", defaultTokenFile))
+func (gd *GoogleDrive) connect(configDir *string, dataDir *string, cfg *config.Backend) error {
+	tokenFile := tokenCacheFile(dataDir, cfg.GetParameter("tokenFile", defaultTokenFile))
 
 	ctx := context.Background()
 
-	clientSecretFile := getParameter(cfg.Config, "clientSecretFile", defaultSecretFile)
+	clientSecretFile := cfg.GetParameter("clientSecretFile", defaultSecretFile)
 	b, err := ioutil.ReadFile(filepath.Join(*configDir, clientSecretFile))
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
@@ -131,7 +136,7 @@ func (gd *googleDrive) connect(configDir *string, dataDir *string, cfg *config.B
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 		return err
 	}
-	client := getClient(tokenFile, ctx, oauthConfig)
+	client := getClient(ctx, tokenFile, oauthConfig)
 
 	gd.srv, err = drive.New(client)
 	if err != nil {
@@ -141,53 +146,51 @@ func (gd *googleDrive) connect(configDir *string, dataDir *string, cfg *config.B
 	return nil
 }
 
-func (gd *googleDrive) loadFiles(tx database.Transaction) (err error) {
-	err = gd.listFiles(func(page *drive.FileList) error {
-		for _, f := range page.Files {
-			if err := insertFile(tx, f); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return tx.SetPaths()
+// loadFiles gets names and properties of all files in the backup location.
+func (gd *GoogleDrive) loadFiles() (chan database.FileOrError, error) {
+	return nil, nil // TODO implement
 }
 
-func insertFile(tx database.Transaction, f *drive.File) error {
-	if !f.Shared {
-		return tx.InsertFile(f.Id, f.Name, uint64(f.Size), &f.Md5Checksum, f.Parents, f.ModifiedTime, nil)
-	}
-	return nil
-}
+//func (gd *GoogleDrive) LoadFiles(tx transaction) (err error) {
+//	err = gd.listFiles(func(page *drive.FileList) error {
+//		for _, f := range page.Files {
+//			if !f.Shared {
+//				if err = tx.InsertFile(f.Id, f.Name, f.MimeType, uint64(f.Size), &f.Md5Checksum, f.Parents, f.ModifiedTime, nil); err != nil {
+//					return err
+//				}
+//			}
+//		}
+//		return nil
+//	})
+//	if err != nil {
+//		return err
+//	}
+//	return tx.SetPaths()
+//}
 
-func (gd *googleDrive) listFiles(cb func(*drive.FileList) error) error {
+func (gd *GoogleDrive) listFiles(cb func(*drive.FileList) error) error {
 	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)
 }
 
 // Backup a new file.
-func (gd *googleDrive) store(localPath *string, fileId *filesys.FileId) {
+func (gd *GoogleDrive) store(localPath *string, fileID *filesys.FileID, pm PathMapper) {
 	log.Printf("Store %s\n", *localPath)
-	//gd.dao.Update(func(tx database.Transaction) error {
-	//	file := &drive.File{Id: fileId.String()}
-	//	return insertFile(tx, file)
-	//})
+	remotePath := pm.RemotePath(*localPath)
+	_, file := path.Split(remotePath)
+	log.Print(file)
 }
 
 // Update the backup for an existing file.
-func (gd *googleDrive) update(localPath *string) {
+func (gd *GoogleDrive) update(localPath *string) {
 	log.Printf("Update %s\n", *localPath)
 }
 
 // Update the location and/or name of a file.
-func (gd *googleDrive) move(localPath *string, rf *database.RemoteFile) {
+func (gd *GoogleDrive) move(localPath *string, rf *database.RemoteFile) {
 	log.Printf("Move %s to %s\n", *localPath, rf.Name)
 }
 
 // Move a backup to the trash folder.
-func (gd *googleDrive) trash(localPath *string) {
+func (gd *GoogleDrive) trash(localPath *string) {
 	log.Printf("Trash %s\n", *localPath)
 }

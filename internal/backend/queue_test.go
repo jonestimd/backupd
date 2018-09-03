@@ -1,16 +1,16 @@
 package backend
 
 import (
-	"testing"
 	"reflect"
+	"testing"
 )
 
-func newMessage(local string, remote string, action Action) *message {
-	return &message{&local, &remote, action}
+func newMessage(local string, remote string, action Action) *Message {
+	return &Message{&local, &remote, action}
 }
 
 func TestQueue_IsFifo(t *testing.T) {
-	messages := []*message{
+	messages := []*Message{
 		newMessage("local path 1", "remote path 1", StoreAction),
 		newMessage("local path 2", "remote path 2", StoreAction),
 	}
@@ -22,19 +22,19 @@ func TestQueue_IsFifo(t *testing.T) {
 
 	for _, expected := range messages {
 		actual := q.Get()
-		if ! reflect.DeepEqual(actual, expected) {
+		if !reflect.DeepEqual(actual, expected) {
 			t.Errorf("Expected %v but got %v", expected, actual)
 		}
 	}
 }
 
 func TestQueue_GetWaitsForMessage(t *testing.T) {
-	messages := []*message{
+	messages := []*Message{
 		newMessage("local path 1", "remote path 1", StoreAction),
 		newMessage("local path 2", "remote path 2", StoreAction),
 	}
 	q := NewQueue()
-	ch := make(chan *message)
+	ch := make(chan *Message)
 	go func() {
 		for range messages {
 			ch <- q.Get()
@@ -48,7 +48,7 @@ func TestQueue_GetWaitsForMessage(t *testing.T) {
 
 	for _, expected := range messages {
 		actual := <-ch
-		if ! reflect.DeepEqual(actual, expected) {
+		if !reflect.DeepEqual(actual, expected) {
 			t.Errorf("Expected %v but got %v", expected, actual)
 		}
 	}

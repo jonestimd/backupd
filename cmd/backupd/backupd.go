@@ -4,12 +4,13 @@ import (
 	"flag"
 	"log"
 
+	"os"
+	"path/filepath"
+
 	"github.com/fsnotify/fsnotify"
 	"github.com/jonestimd/backupd/internal/backend"
 	"github.com/jonestimd/backupd/internal/config"
 	"github.com/jonestimd/backupd/internal/filesys"
-	"os"
-	"path/filepath"
 )
 
 // TODO handle mount/umount for watched directories
@@ -26,7 +27,7 @@ var dataDir = flag.String("d", defaultDataDir, "Data directory")
 func startMonitor(dest *backend.Destination) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatalf("Error initializing file watcher for %s\n\t%v\n", dest.Source, err)
+		log.Fatalf("Error initializing file watcher for %s\n\t%v\n", *dest.LocalRoot, err)
 		os.Exit(1)
 	}
 	//defer watcher.Close()
@@ -34,7 +35,7 @@ func startMonitor(dest *backend.Destination) {
 
 	// TODO look for config files, handle ignored files
 	// TODO don't use Walk?  Is it too slow (due to sorting)?
-	go filepath.Walk(*dest.Source, func(path string, info os.FileInfo, err error) error {
+	go filepath.Walk(*dest.LocalRoot, func(path string, info os.FileInfo, err error) error {
 		// TODO how to handle input err
 		if err != nil {
 			log.Printf("Error walking %s: %v\n", path, err)
@@ -55,15 +56,15 @@ func handleFileChanges(watcher *fsnotify.Watcher, dest *backend.Destination) {
 		select {
 		case event := <-watcher.Events:
 			log.Println("event:", event)
-			if event.Op & fsnotify.Write == fsnotify.Write { // TODO is file still open?
+			if (event.Op & fsnotify.Write) == fsnotify.Write { // TODO is file still open?
 				dest.Update(event.Name)
 				printKey(event.Name)
 			}
-			if event.Op & fsnotify.Remove == fsnotify.Remove {
+			if (event.Op & fsnotify.Remove) == fsnotify.Remove {
 				dest.Delete(event.Name)
 				printKey(event.Name)
 			}
-			if event.Op & fsnotify.Create == fsnotify.Create { // TODO is file still open?
+			if (event.Op & fsnotify.Create) == fsnotify.Create { // TODO is file still open?
 				dest.Add(event.Name)
 				printKey(event.Name)
 			}
@@ -74,11 +75,11 @@ func handleFileChanges(watcher *fsnotify.Watcher, dest *backend.Destination) {
 }
 
 func printKey(path string) {
-	fileId, err := filesys.Stat(path)
+	fileID, err := filesys.Stat(path)
 	if err != nil {
 		log.Println("  can't stat", path)
 	} else {
-		log.Printf("  %s: %s-%016x", path, fileId.FsId, fileId.Ino)
+		log.Printf("  %s: %s-%016x", path, fileID.FsID, fileID.Ino)
 	}
 }
 
@@ -100,12 +101,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	dests, err := backend.Connect(configDir, dataDir, cfg)
-	if err != nil {
-		log.Fatalf("Failed to connect: %v\n", err)
-		os.Exit(1)
-	}
+	dests := backend.Connect(configDir, dataDir, cfg)
 	for _, d := range dests {
+		// TODO look for deleted files
 		startMonitor(d)
 	}
 

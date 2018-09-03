@@ -7,13 +7,13 @@ import (
 	"fmt"
 )
 
-type FileId struct {
-	FsId string
+type FileID struct {
+	FsID string
 	Ino  uint64
 }
 
-func (id *FileId) String() string {
-	return fmt.Sprintf("%s-%016x", id.FsId, id.Ino)
+func (id *FileID) String() string {
+	return fmt.Sprintf("%s-%016x", id.FsID, id.Ino)
 }
 
 func ListDirectories(path string, ch chan string) {

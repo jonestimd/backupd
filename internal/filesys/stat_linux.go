@@ -6,9 +6,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func Stat(path string) (key *FileId, err error) {
+func Stat(path string) (key *FileID, err error) {
 	var finfo unix.Stat_t
-	key = &FileId{}
+	key = &FileID{}
 	if err = unix.Stat(path, &finfo); err != nil {
 		return
 	}
@@ -17,6 +17,6 @@ func Stat(path string) (key *FileId, err error) {
 	if err = unix.Statfs(path, &fsinfo); err != nil {
 		return
 	}
-	key.FsId = fmt.Sprintf("%08x%08x", uint32(fsinfo.Fsid.X__val[0]), uint32(fsinfo.Fsid.X__val[1]))
+	key.FsID = fmt.Sprintf("%08x%08x", uint32(fsinfo.Fsid.X__val[0]), uint32(fsinfo.Fsid.X__val[1]))
 	return
 }

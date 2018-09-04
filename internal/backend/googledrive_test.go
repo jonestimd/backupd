@@ -81,3 +81,71 @@ func TestNewGoogleDrive(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadFiles_FieldMapping(t *testing.T) {
+	remoteFile := drive.File{
+		Id:           "remote ID",
+		Name:         "file name",
+		MimeType:     "mime type",
+		Size:         123,
+		Md5Checksum:  "md5 checksum",
+		Parents:      []string{"the parent"},
+		ModifiedTime: "yesterday",
+	}
+	page := drive.FileList{Files: []*drive.File{&remoteFile}, NextPageToken: ""}
+	gd := &GoogleDrive{}
+	gd.listFiles = func(cb func(*drive.FileList) error) error {
+		cb(&page)
+		return nil
+	}
+
+	fileCh, err := gd.loadFiles()
+
+	assert.Nil(t, err)
+	file := <-fileCh
+	assert.Equal(t, remoteFile.Id, *file.File.RemoteID)
+	assert.Equal(t, remoteFile.Name, file.File.Name)
+	assert.Equal(t, remoteFile.MimeType, file.File.MimeType)
+	assert.Equal(t, uint64(remoteFile.Size), file.File.Size)
+	assert.Equal(t, remoteFile.Md5Checksum, *file.File.Md5Checksum)
+	assert.Equal(t, remoteFile.Parents, file.File.ParentIDs)
+	assert.Equal(t, remoteFile.ModifiedTime, *file.File.LastModified)
+}
+
+func TestLoadFiles(t *testing.T) {
+	tests := []struct {
+		name          string
+		pages         []drive.FileList
+		expectedCount int
+	}{
+		{"no files", []drive.FileList{drive.FileList{Files: []*drive.File{}, NextPageToken: ""}}, 0},
+		{"multiple pages", []drive.FileList{
+			drive.FileList{Files: []*drive.File{&drive.File{Id: "f1"}, &drive.File{Id: "f2"}}, NextPageToken: "not done"},
+			drive.FileList{Files: []*drive.File{&drive.File{Id: "f3"}, &drive.File{Id: "f4"}}, NextPageToken: ""},
+		}, 4},
+		{"skip shared files", []drive.FileList{
+			drive.FileList{Files: []*drive.File{&drive.File{Id: "f1", Shared: true}, &drive.File{Id: "f2"}}, NextPageToken: "not done"},
+			drive.FileList{Files: []*drive.File{&drive.File{Id: "f3"}, &drive.File{Id: "f4", Shared: true}}, NextPageToken: ""},
+		}, 2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gd := &GoogleDrive{}
+			gd.listFiles = func(cb func(*drive.FileList) error) error {
+				for _, fl := range test.pages {
+					cb(&fl)
+				}
+				return nil
+			}
+
+			fileCh, err := gd.loadFiles()
+
+			assert.Nil(t, err)
+			var ids []*string
+			for file := range fileCh {
+				ids = append(ids, file.File.RemoteID)
+			}
+			assert.Equal(t, test.expectedCount, len(ids))
+		})
+	}
+}

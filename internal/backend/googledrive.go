@@ -36,6 +36,7 @@ type GoogleDrive struct {
 	folderMimeType string
 	rootFolderID   string
 	srv            *drive.Service
+	listFiles      func(cb func(*drive.FileList) error) error
 }
 
 // PathMapper converts between local and remote file paths.
@@ -147,6 +148,9 @@ func (gd *GoogleDrive) connect(configDir *string, dataDir *string, cfg *config.B
 		log.Printf("Unable to create drive Client %v", err)
 		return err
 	}
+	gd.listFiles = func(cb func(*drive.FileList) error) error {
+		return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)
+	}
 	return nil
 }
 
@@ -167,14 +171,12 @@ func (gd *GoogleDrive) loadFiles() (chan database.FileOrError, error) {
 				}}
 			}
 		}
-		close(fileCh)
+		if page.NextPageToken == "" {
+			close(fileCh)
+		}
 		return nil
 	})
 	return fileCh, nil
-}
-
-func (gd *GoogleDrive) listFiles(cb func(*drive.FileList) error) error {
-	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)
 }
 
 // Backup a new file.

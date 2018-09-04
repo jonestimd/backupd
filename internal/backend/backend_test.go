@@ -47,10 +47,6 @@ func mockServiceFactory(configDir *string, dataDir *string, cfg *config.Backend)
 	return &mockService{configDir: configDir, dataDir: dataDir, cfg: cfg}, nil
 }
 
-func addrOf(value string) *string {
-	return &value
-}
-
 func configuration(backendName string, sourceDir string, destDir string) *config.Config {
 	return &config.Config{
 		Backends: map[string]*config.Backend{backendName: {Type: config.GoogleDriveName}},

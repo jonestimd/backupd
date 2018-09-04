@@ -27,6 +27,10 @@ const (
 	fileFields            = "nextPageToken, files(id, name, parents, mimeType, md5Checksum, size, modifiedTime, trashed, shared, version)"
 )
 
+/* for mocking in tests */
+var configFromJSON = google.ConfigFromJSON
+var newDrive = drive.New
+
 // GoogleDrive provides backup to Google Drive.
 type GoogleDrive struct {
 	folderMimeType string
@@ -123,24 +127,24 @@ func (gd *GoogleDrive) connect(configDir *string, dataDir *string, cfg *config.B
 	ctx := context.Background()
 
 	clientSecretFile := cfg.GetParameter("clientSecretFile", defaultSecretFile)
-	b, err := ioutil.ReadFile(filepath.Join(*configDir, clientSecretFile))
+	csBytes, err := ioutil.ReadFile(filepath.Join(*configDir, clientSecretFile))
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		log.Printf("Unable to read client secret file: %v", err)
 		return err
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
 	// at ~/.backupd/gd_token.json
-	oauthConfig, err := google.ConfigFromJSON(b, drive.DriveScope)
+	oauthConfig, err := configFromJSON(csBytes, drive.DriveScope)
 	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
+		log.Printf("Unable to parse client secret file to config: %v", err)
 		return err
 	}
 	client := getClient(ctx, tokenFile, oauthConfig)
 
-	gd.srv, err = drive.New(client)
+	gd.srv, err = newDrive(client)
 	if err != nil {
-		log.Fatalf("Unable to create drive Client %v", err)
+		log.Printf("Unable to create drive Client %v", err)
 		return err
 	}
 	return nil
@@ -148,25 +152,26 @@ func (gd *GoogleDrive) connect(configDir *string, dataDir *string, cfg *config.B
 
 // loadFiles gets names and properties of all files in the backup location.
 func (gd *GoogleDrive) loadFiles() (chan database.FileOrError, error) {
-	return nil, nil // TODO implement
+	fileCh := make(chan database.FileOrError)
+	go gd.listFiles(func(page *drive.FileList) error {
+		for _, f := range page.Files {
+			if !f.Shared {
+				fileCh <- database.FileOrError{File: &database.RemoteFile{
+					RemoteID:     &f.Id,
+					Name:         f.Name,
+					MimeType:     f.MimeType,
+					Size:         uint64(f.Size),
+					Md5Checksum:  &f.Md5Checksum,
+					ParentIDs:    f.Parents,
+					LastModified: &f.ModifiedTime,
+				}}
+			}
+		}
+		close(fileCh)
+		return nil
+	})
+	return fileCh, nil
 }
-
-//func (gd *GoogleDrive) LoadFiles(tx transaction) (err error) {
-//	err = gd.listFiles(func(page *drive.FileList) error {
-//		for _, f := range page.Files {
-//			if !f.Shared {
-//				if err = tx.InsertFile(f.Id, f.Name, f.MimeType, uint64(f.Size), &f.Md5Checksum, f.Parents, f.ModifiedTime, nil); err != nil {
-//					return err
-//				}
-//			}
-//		}
-//		return nil
-//	})
-//	if err != nil {
-//		return err
-//	}
-//	return tx.SetPaths()
-//}
 
 func (gd *GoogleDrive) listFiles(cb func(*drive.FileList) error) error {
 	return gd.srv.Files.List().Fields(fileFields).OrderBy("folder").Q("not trashed").Pages(nil, cb)

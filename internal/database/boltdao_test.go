@@ -8,7 +8,6 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 const (
@@ -307,14 +306,26 @@ func TestBoltDao_FindByPath(t *testing.T) {
 	}
 }
 
+type fileInfoMock struct {
+	id   string
+	size uint64
+}
+
+func (fi *fileInfoMock) ID() string {
+	return fi.id
+}
+
+func (fi *fileInfoMock) Size() uint64 {
+	return fi.size
+}
 func TestBoltDao_FindByID(t *testing.T) {
 	tests := []struct {
 		description string
-		fileId      *filesys.FileID
+		fileInfo    *fileInfoMock
 		record      *RemoteFile
 	}{
-		{"file exists", &filesys.FileID{"hd1", 1234}, &RemoteFile{}},
-		{"file does not exist", &filesys.FileID{"hd1", 5678}, nil},
+		{"file exists", &fileInfoMock{"hd1-1234", 1234}, &RemoteFile{}},
+		{"file does not exist", &fileInfoMock{"hd1-5678", 5678}, nil},
 	}
 
 	dao, err := OpenDb(testDbFile, nil)
@@ -324,16 +335,16 @@ func TestBoltDao_FindByID(t *testing.T) {
 		defer removeTestDb(t, dao)
 		dao.db.Update(func(tx *bolt.Tx) error {
 			byPath, _ := tx.CreateBucket([]byte(byPathBucket))
-			byPath.Put([]byte("/remote/path"), []byte(tests[0].fileId.String()))
+			byPath.Put([]byte("/remote/path"), []byte(tests[0].fileInfo.ID()))
 			byID, _ := tx.CreateBucket([]byte(byIDBucket))
-			byID.Put([]byte(tests[0].fileId.String()), toBytes(tests[0].record))
+			byID.Put([]byte(tests[0].fileInfo.ID()), toBytes(tests[0].record))
 			return nil
 		})
 	}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			rf := dao.FindByID(test.fileId)
+			rf := dao.FindByID(test.fileInfo)
 			if rf == nil && test.record != nil {
 				t.Fatal("Expected record but got nil")
 			}

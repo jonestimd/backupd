@@ -180,10 +180,9 @@ func (gd *GoogleDrive) loadFiles() (chan database.FileOrError, error) {
 }
 
 // Backup a new file.
-func (gd *GoogleDrive) store(localPath *string, fileID *filesys.FileID, pm PathMapper) {
+func (gd *GoogleDrive) store(localPath *string, finfo *filesys.FileInfo, remotePath *string) {
 	log.Printf("Store %s\n", *localPath)
-	remotePath := pm.RemotePath(*localPath)
-	_, file := path.Split(remotePath)
+	_, file := path.Split(*remotePath)
 	log.Print(file)
 }
 

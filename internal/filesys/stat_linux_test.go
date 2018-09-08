@@ -2,17 +2,16 @@ package filesys
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStat(t *testing.T) {
 	info, err := Stat("filesys.go")
 
-	if err != nil {
-		t.Errorf("Unexpected error %v", err)
-	}
-	if len(info.FsID) != 16 {
-		t.Errorf("Expected FsID to be 16 chars")
-	}
+	assert.Nil(t, err, "Unexpected error")
+	assert.Equal(t, 16, len(info.fsID), "Expected FsID to be 16 chars")
+	assert.NotEqual(t, 0, info.Size())
 
 	_, err = Stat("x")
 

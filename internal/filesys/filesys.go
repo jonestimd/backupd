@@ -1,21 +1,30 @@
 package filesys
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"fmt"
 )
 
-type FileID struct {
-	FsID string
-	Ino  uint64
+// FileInfo contains information about a local file.
+type FileInfo struct {
+	fsID string
+	ino  uint64
+	size uint64
 }
 
-func (id *FileID) String() string {
-	return fmt.Sprintf("%s-%016x", id.FsID, id.Ino)
+// ID returns a unique identifier for the file.
+func (info *FileInfo) ID() string {
+	return fmt.Sprintf("%s-%016x", info.fsID, info.ino)
 }
 
+// Size returns the size of the file in bytes.
+func (info *FileInfo) Size() uint64 {
+	return info.size
+}
+
+// ListDirectories writes directories starting with path to the provided channel.
 func ListDirectories(path string, ch chan string) {
 	stat, err := os.Lstat(path)
 	if err != nil {

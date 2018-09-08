@@ -2,6 +2,8 @@ package filesys
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestListDirectories(t *testing.T) {
@@ -10,7 +12,9 @@ func TestListDirectories(t *testing.T) {
 		startPath   string
 		expected    []string
 	}{
-		{"directory", "..", []string{"..", "../database", "../backend", "../config", "../filesys", "../database/testdata", "../backend/testdata", "../config/testdata"}},
+		{"directory", "..", []string{
+			"..", "../database", "../backend", "../config", "../filesys", "../database/testdata",
+			"../backend/testdata", "../config/testdata", "../backend/testdata/.auth"}},
 		{"file", "filesys.go", []string{}},
 		{"unknown", "x", []string{}},
 	}
@@ -25,23 +29,20 @@ func TestListDirectories(t *testing.T) {
 			for d := range dirs {
 				result = append(result, d)
 			}
-			if len(result) != len(test.expected) {
-				t.Errorf("Expected %d directories, found %d", len(test.expected), len(result))
-			} else {
+			assert.Equal(t, len(test.expected), len(result), "Directory count mismatch")
+			if len(result) == len(test.expected) {
 				for i, d := range result {
-					if d != test.expected[i] {
-						t.Errorf("Expected path %s to equal %s", d, test.expected[i])
-					}
+					assert.Equal(t, test.expected[i], d)
 				}
 			}
 		})
 	}
 }
 
-func TestFileID_String(t *testing.T) {
-	fileID := &FileID{"file sys ID", 0xdeadbeefabacab}
+func TestFileInfo_String(t *testing.T) {
+	info := &FileInfo{"file sys ID", 0xdeadbeefabacab, 0}
 
-	if fileID.String() != "file sys ID-00deadbeefabacab" {
-		t.Errorf("Wrong format for file ID: %s", fileID.String())
+	if info.ID() != "file sys ID-00deadbeefabacab" {
+		t.Errorf("Wrong format for file ID: %s", info.ID())
 	}
 }

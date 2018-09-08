@@ -6,17 +6,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func Stat(path string) (key *FileID, err error) {
+// Stat returns information about a local file.
+func Stat(path string) (*FileInfo, error) {
 	var finfo unix.Stat_t
-	key = &FileID{}
-	if err = unix.Stat(path, &finfo); err != nil {
-		return
+	if err := unix.Stat(path, &finfo); err != nil {
+		return nil, err
 	}
-	key.Ino = finfo.Ino
 	var fsinfo unix.Statfs_t
-	if err = unix.Statfs(path, &fsinfo); err != nil {
-		return
+	if err := unix.Statfs(path, &fsinfo); err != nil {
+		return nil, err
 	}
-	key.FsID = fmt.Sprintf("%08x%08x", uint32(fsinfo.Fsid.X__val[0]), uint32(fsinfo.Fsid.X__val[1]))
-	return
+	fsID := fmt.Sprintf("%08x%08x", uint32(fsinfo.Fsid.X__val[0]), uint32(fsinfo.Fsid.X__val[1]))
+	return &FileInfo{fsID, finfo.Ino, uint64(finfo.Size)}, nil
 }

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
-	"github.com/jonestimd/backupd/internal/filesys"
 )
 
 const (
@@ -13,13 +12,20 @@ const (
 	byPathBucket = "FilesByPath"
 )
 
+// BoltDao provides caching of file information using a bbold database.
 type BoltDao struct {
 	db *bolt.DB
 }
 
+// FileOrError contains either a cache entry or an error.
 type FileOrError struct {
 	File  *RemoteFile
 	Error error
+}
+
+type FileInfo interface {
+	ID() string
+	Size() uint64
 }
 
 // OpenDb opens the specified data file.  If the database is empty then getFiles is used to populate it.
@@ -55,6 +61,7 @@ func OpenDb(fileName string, getFiles func() (chan FileOrError, error)) (*BoltDa
 	return dao, nil
 }
 
+// Close closes the bbolt database.
 func (dao *BoltDao) Close() error {
 	return dao.db.Close()
 }
@@ -107,9 +114,9 @@ func (dao *BoltDao) FindByPath(remotePath string) *RemoteFile {
 }
 
 // FindByID looks up a file record using the local ID.
-func (dao *BoltDao) FindByID(fileID *filesys.FileID) (rf *RemoteFile) {
+func (dao *BoltDao) FindByID(finfo FileInfo) (rf *RemoteFile) {
 	dao.db.View(func(tx *bolt.Tx) error {
-		if rec := tx.Bucket([]byte(byIDBucket)).Get([]byte(fileID.String())); rec != nil {
+		if rec := tx.Bucket([]byte(byIDBucket)).Get([]byte(finfo.ID())); rec != nil {
 			rf = toRemoteFile(rec)
 		}
 		return nil

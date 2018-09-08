@@ -77,11 +77,11 @@ func handleFileChanges(watcher *fsnotify.Watcher, dest *backend.Destination) {
 }
 
 func printKey(path string) {
-	fileID, err := filesys.Stat(path)
+	fileInfo, err := filesys.Stat(path)
 	if err != nil {
 		log.Println("  can't stat", path)
 	} else {
-		log.Printf("  %s: %s-%016x", path, fileID.FsID, fileID.Ino)
+		log.Printf("  %s: %s", path, fileInfo.ID())
 	}
 }
 
